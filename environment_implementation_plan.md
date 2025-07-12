@@ -1,4 +1,4 @@
-# AI Character Twitter Platform - Environment Implementation Plan
+# Cuentamelo - Environment Implementation Plan
 
 ## Python Environment Setup Strategy
 
@@ -15,7 +15,7 @@
 
 ## **Project Overview**
 
-**Objective**: Establish a robust, production-ready development environment for the AI Character Twitter Platform within the 3-day hackathon timeline.
+**Objective**: Establish a robust, production-ready development environment for Cuentamelo within the 3-day hackathon timeline.
 
 **Current Architecture Strengths**:
 
@@ -241,7 +241,7 @@ from app.config import settings
 from app.api import health
 
 app = FastAPI(
-    title="AI Character Twitter Platform",
+    title="Cuentamelo",
     description="LangGraph-powered AI character orchestration for social media",
     version="1.0.0"
 )
@@ -252,7 +252,7 @@ app.include_router(health.router, prefix="/health", tags=["health"])
 @app.get("/")
 async def root():
     return {
-        "message": "AI Character Twitter Platform",
+        "message": "Cuentamelo",
         "status": "running",
         "version": "1.0.0"
     }
@@ -270,7 +270,7 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    app_name: str = "AI Character Twitter Platform"
+    app_name: str = "Cuentamelo"
     debug: bool = True
     log_level: str = "INFO"
 
