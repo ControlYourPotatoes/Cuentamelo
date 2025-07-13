@@ -12,7 +12,9 @@ from app.models.conversation import (
     AgentState, ConversationMessage, MessageType, AgentDecision,
     NewsItem, CharacterReaction, is_character_available
 )
-from app.models.personality import PersonalityData, get_personality_by_id
+from app.models.personality import PersonalityData
+from app.models.personalities.personality_factory import get_personality_by_id
+from app.ports.personality_port import PersonalityPort
 from app.ports.ai_provider import AIProviderPort, AIResponse
 
 logger = logging.getLogger(__name__)
