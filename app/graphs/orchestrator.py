@@ -147,7 +147,7 @@ async def initialize_orchestration(state: OrchestrationWorkflowState) -> Orchest
 
 
 async def process_news_queue(state: OrchestrationWorkflowState) -> OrchestrationWorkflowState:
-    """Process pending news items and prepare for character processing."""
+    """Process pending news items with realistic character discovery."""
     try:
         orchestration_state = state["orchestration_state"]
         
@@ -162,9 +162,10 @@ async def process_news_queue(state: OrchestrationWorkflowState) -> Orchestration
         current_news = orchestration_state.pending_news_queue.pop(0)
         state["current_news_item"] = current_news
         
-        # Determine which characters should process this news
-        processing_characters = []
+        # REALISTIC APPROACH: Only one character discovers news at a time
+        # This simulates how people actually discover news on social media
         characters = state["character_agents"]
+        available_characters = []
         
         for char_id, character_agent in characters.items():
             # Check if character is available
@@ -176,16 +177,37 @@ async def process_news_queue(state: OrchestrationWorkflowState) -> Orchestration
             if current_news.topics:
                 relevance = character_agent.get_topic_relevance(current_news.topics)
                 if relevance >= 0.3:  # Minimum relevance threshold
-                    processing_characters.append(char_id)
+                    available_characters.append(char_id)
             else:
                 # If no topics specified, let all available characters decide
-                processing_characters.append(char_id)
+                available_characters.append(char_id)
         
-        state["processing_characters"] = processing_characters
+        # Select ONE character to discover this news (realistic)
+        if available_characters:
+            import random
+            # Weight by character engagement probability
+            discovery_weights = []
+            for char_id in available_characters:
+                char_agent = characters[char_id]
+                # Higher engagement threshold = lower chance to discover first
+                weight = 1.0 - char_agent.engagement_threshold
+                discovery_weights.append(weight)
+            
+            # Normalize weights
+            total_weight = sum(discovery_weights)
+            if total_weight > 0:
+                normalized_weights = [w/total_weight for w in discovery_weights]
+                selected_character = random.choices(available_characters, weights=normalized_weights)[0]
+            else:
+                selected_character = random.choice(available_characters)
+            
+            state["processing_characters"] = [selected_character]
+            logger.info(f"Character {selected_character} discovered news: {current_news.headline[:50]}...")
+        else:
+            state["processing_characters"] = []
+            logger.info(f"No characters available to process news: {current_news.headline[:50]}...")
+        
         state["workflow_step"] = "process_news_queue"
-        
-        logger.info(f"Processing news: {current_news.headline[:50]}... with {len(processing_characters)} characters")
-        
         return state
         
     except Exception as e:

@@ -28,6 +28,12 @@ class CharacterWorkflowState(TypedDict):
     conversation_history: Optional[List[ConversationMessage]]
     target_topic: Optional[str]
     
+    # Thread Context (NEW)
+    thread_id: Optional[str]
+    thread_context: Optional[str]
+    is_new_thread: bool
+    thread_engagement_state: Optional[Any]  # ThreadEngagementState
+    
     # Agent State
     agent_state: AgentState
     
@@ -218,7 +224,7 @@ async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWo
 
 
 async def generate_character_response(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Generate character response using Claude API."""
+    """Generate character response using Claude API with thread awareness."""
     try:
         character_agent = state["character_agent"]
         agent_state = state["agent_state"]
@@ -226,10 +232,25 @@ async def generate_character_response(state: CharacterWorkflowState) -> Characte
         
         agent_state.current_step = "generate_response"
         
-        # Generate response
+        # THREAD-AWARE CONTEXT ENHANCEMENT
+        enhanced_context = context
+        
+        # Check if this is a thread reply
+        if state.get("thread_engagement_state") and not state.get("is_new_thread", True):
+            thread_state = state["thread_engagement_state"]
+            thread_context = thread_state.get_thread_context(character_agent.character_id)
+            enhanced_context = f"Thread context: {thread_context}\n\nOriginal content: {context}"
+            
+            # Add Twitter-specific context
+            enhanced_context += "\n\nIMPORTANT: This is a reply to an existing Twitter thread. Keep your response concise and engaging. Reference the thread context naturally."
+        else:
+            # New thread - add Twitter context
+            enhanced_context += "\n\nIMPORTANT: This is a new Twitter post. Make it engaging and start a conversation. Use appropriate hashtags and mentions if relevant."
+        
+        # Generate response using character agent
         claude_response = await character_agent.generate_response(
             state=agent_state,
-            context=context,
+            context=enhanced_context,
             conversation_history=state.get("conversation_history"),
             target_topic=state.get("target_topic")
         )
@@ -244,7 +265,7 @@ async def generate_character_response(state: CharacterWorkflowState) -> Characte
         state["generated_response"] = claude_response.content
         state["workflow_step"] = "generate_response"
         
-        logger.info(f"Generated response for {character_agent.character_name}: {len(claude_response.content)} chars")
+        logger.info(f"Generated {'thread reply' if not state.get('is_new_thread', True) else 'new post'} for {character_agent.character_name}: {len(claude_response.content)} chars")
         
         return state
         
