@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://:cuentamelo_redis@localhost:6379/0"
 
     # APIs
-    anthropic_api_key: str = ""
+    ANTHROPIC_API_KEY: str = ""
     twitter_api_key: Optional[str] = None
     twitter_api_secret: Optional[str] = None
     twitter_access_token: Optional[str] = None
