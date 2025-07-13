@@ -28,4 +28,9 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"  # Ignore extra environment variables
 
+
+def get_settings():
+    """Get the global settings instance."""
+    return Settings()
+
 settings = Settings() 
