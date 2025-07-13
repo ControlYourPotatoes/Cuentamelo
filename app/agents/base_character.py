@@ -31,24 +31,32 @@ class BaseCharacterAgent(ABC):
     def __init__(
         self,
         character_id: str,
-        ai_provider: Optional[AIProviderPort] = None
+        ai_provider: Optional[AIProviderPort] = None,
+        personality: Optional[PersonalityPort] = None
     ):
         self.character_id = character_id
         
-        # Load personality data
-        self.personality_data = get_personality_by_id(character_id)
+        # Load personality data - use provided personality or get from factory
+        if personality:
+            self.personality_data = personality
+        else:
+            self.personality_data = get_personality_by_id(character_id)
+            
         if not self.personality_data:
             raise ValueError(f"No personality data found for character: {character_id}")
         
         # Inject AI provider dependency
         self.ai_provider = ai_provider
         
-        # Character-specific configuration from personality data
-        self.engagement_threshold = self.personality_data.engagement_threshold
-        self.cooldown_minutes = self.personality_data.cooldown_minutes
-        self.max_daily_interactions = self.personality_data.max_daily_interactions
-        self.max_replies_per_thread = self.personality_data.max_replies_per_thread
-        self.preferred_topics = set(self.personality_data.preferred_topics)
+        # Get agent personality data for configuration
+        agent_data = self.personality_data.get_agent_personality_data()
+        
+        # Character-specific configuration from agent personality data
+        self.engagement_threshold = agent_data.engagement_threshold
+        self.cooldown_minutes = agent_data.cooldown_minutes
+        self.max_daily_interactions = agent_data.max_daily_interactions
+        self.max_replies_per_thread = agent_data.max_replies_per_thread
+        self.preferred_topics = set(agent_data.preferred_topics)
         
         # Performance tracking
         self.interaction_count = 0
@@ -58,12 +66,12 @@ class BaseCharacterAgent(ABC):
     @property
     def character_name(self) -> str:
         """Get character name from personality data."""
-        return self.personality_data.character_name
+        return self.personality_data.get_agent_personality_data().character_name
     
     @property
     def character_type(self) -> str:
         """Get character type from personality data."""
-        return self.personality_data.character_type
+        return self.personality_data.get_agent_personality_data().character_type
     
     async def initialize_ai_provider(self, ai_provider: AIProviderPort):
         """Initialize AI provider if not provided."""
@@ -191,7 +199,7 @@ class BaseCharacterAgent(ABC):
             
             # Generate response using AI provider
             response = await self.ai_provider.generate_character_response(
-                personality_data=self.personality_data,
+                personality_data=self.personality_data.get_ai_personality_data(),
                 context=enhanced_context,
                 conversation_history=conversation_history,
                 target_topic=target_topic,
@@ -262,7 +270,7 @@ class BaseCharacterAgent(ABC):
             
             # Generate reaction using AI provider
             response = await self.ai_provider.generate_news_reaction(
-                personality_data=self.personality_data,
+                personality_data=self.personality_data.get_ai_personality_data(),
                 news_headline=news_item.headline,
                 news_content=news_item.content,
                 emotional_context=emotional_context
@@ -396,14 +404,16 @@ class BaseCharacterAgent(ABC):
     def _get_fallback_response(self, context: str) -> str:
         """Get fallback response when AI generation fails."""
         # Use personality data to generate appropriate fallback
-        if self.personality_data.signature_phrases:
-            signature = self.personality_data.signature_phrases[0]
+        agent_data = self.personality_data.get_agent_personality_data()
+        if agent_data.signature_phrases:
+            signature = agent_data.signature_phrases[0]
             return f"{signature} [Response temporarily unavailable]"
         
         return f"[{self.character_name} response temporarily unavailable]"
     
     def get_character_summary(self) -> Dict[str, Any]:
         """Get character summary information."""
+        agent_data = self.personality_data.get_agent_personality_data()
         return {
             "character_id": self.character_id,
             "character_name": self.character_name,
@@ -414,7 +424,7 @@ class BaseCharacterAgent(ABC):
             "interaction_count": self.interaction_count,
             "total_engagements": self.total_engagements,
             "preferred_topics": list(self.preferred_topics),
-            "personality_traits": self.personality_data.personality_traits[:100] + "..." if len(self.personality_data.personality_traits) > 100 else self.personality_data.personality_traits
+            "personality_traits": agent_data.personality_traits[:100] + "..." if len(agent_data.personality_traits) > 100 else agent_data.personality_traits
         }
     
     def __str__(self) -> str:

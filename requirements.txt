@@ -39,3 +39,4 @@ httpx>=0.25.0
 uuid
 datetime
 typing-extensions>=4.8.0
+jsonschema>=4.20.0

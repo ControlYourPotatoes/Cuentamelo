@@ -3,8 +3,13 @@ Personality port interface for character agents.
 Defines the contract for personality data access and behavior.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from enum import Enum
+
+if TYPE_CHECKING:
+    from app.models.personality import PersonalityData
+    from app.models.ai_personality_data import AIPersonalityData
+    from app.models.agent_personality_data import AgentPersonalityData
 
 
 class PersonalityTone(str, Enum):
@@ -229,5 +234,35 @@ class PersonalityPort(ABC):
             
         Returns:
             Dict[str, float]: Dictionary with boost factors (e.g., "energy", "pr_relevance", "emotion", "trending")
+        """
+        pass
+    
+    @abstractmethod
+    def get_personality_data(self) -> 'PersonalityData':
+        """
+        Get the underlying PersonalityData object for AI providers.
+        
+        Returns:
+            PersonalityData: The personality data object
+        """
+        pass
+    
+    @abstractmethod
+    def get_ai_personality_data(self) -> 'AIPersonalityData':
+        """
+        Get the minimal AI personality data for AI providers.
+        
+        Returns:
+            AIPersonalityData: The minimal AI personality data
+        """
+        pass
+    
+    @abstractmethod
+    def get_agent_personality_data(self) -> 'AgentPersonalityData':
+        """
+        Get the minimal agent personality data for agent behavior.
+        
+        Returns:
+            AgentPersonalityData: The minimal agent personality data
         """
         pass 

@@ -7,7 +7,7 @@ import logging
 
 from app.ports.ai_provider import AIProviderPort, AIResponse
 from app.models.conversation import ConversationMessage
-from app.models.personality import PersonalityData
+from app.models.ai_personality_data import AIPersonalityData
 from app.tools.claude_client import ClaudeClient, PersonalityPrompt
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def generate_character_response(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         context: str,
         conversation_history: Optional[List[ConversationMessage]] = None,
         target_topic: Optional[str] = None,
@@ -98,7 +98,7 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def generate_news_reaction(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         news_headline: str,
         news_content: str,
         emotional_context: str = "neutral"
@@ -138,7 +138,7 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def validate_personality_consistency(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         generated_content: str
     ) -> bool:
         """Validate personality consistency using Claude."""
@@ -155,8 +155,8 @@ class ClaudeAIAdapter(AIProviderPort):
         """Check if Claude API is available."""
         try:
             # Simple test call to verify API connectivity
-            from app.models.personality import LanguageStyle
-            test_personality = PersonalityData(
+            from app.models.ai_personality_data import LanguageStyle
+            test_personality = AIPersonalityData(
                 character_id="test",
                 character_name="Test",
                 character_type="test",
@@ -179,7 +179,7 @@ class ClaudeAIAdapter(AIProviderPort):
             logger.error(f"Claude health check failed: {str(e)}")
             return False
     
-    def _convert_to_claude_prompt(self, personality_data: PersonalityData) -> PersonalityPrompt:
+    def _convert_to_claude_prompt(self, personality_data: AIPersonalityData) -> PersonalityPrompt:
         """Convert our domain model to Claude's format."""
         return PersonalityPrompt(
             character_name=personality_data.character_name,
@@ -196,7 +196,7 @@ class ClaudeAIAdapter(AIProviderPort):
         context: str,
         thread_context: Optional[str],
         is_new_thread: bool,
-        personality_data: PersonalityData
+        personality_data: AIPersonalityData
     ) -> str:
         """Enhance context with thread awareness and personality-specific instructions."""
         
@@ -221,7 +221,7 @@ class ClaudeAIAdapter(AIProviderPort):
         
         return enhanced_context
     
-    def _generate_character_specific_prompt(self, personality_data: PersonalityData) -> str:
+    def _generate_character_specific_prompt(self, personality_data: AIPersonalityData) -> str:
         """Generate character-specific personality prompt with detailed instructions."""
         
         prompt = f"""DETAILED {personality_data.character_name.upper()} PERSONALITY:

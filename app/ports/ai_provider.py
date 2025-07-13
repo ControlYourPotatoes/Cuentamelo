@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
 from app.models.conversation import ConversationMessage
-from app.models.personality import PersonalityData
+from app.models.ai_personality_data import AIPersonalityData
 
 
 class AIResponse(BaseModel):
@@ -29,7 +29,7 @@ class AIProviderPort(ABC):
     @abstractmethod
     async def generate_character_response(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         context: str,
         conversation_history: Optional[List[ConversationMessage]] = None,
         target_topic: Optional[str] = None,
@@ -40,7 +40,7 @@ class AIProviderPort(ABC):
         Generate a character response based on personality and context.
         
         Args:
-            personality_data: Complete personality configuration for the character
+            personality_data: AI personality configuration for the character
             context: Content to respond to
             conversation_history: Previous conversation messages
             target_topic: Specific topic to focus on
@@ -52,7 +52,7 @@ class AIProviderPort(ABC):
     @abstractmethod
     async def generate_news_reaction(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         news_headline: str,
         news_content: str,
         emotional_context: str = "neutral"
@@ -63,7 +63,7 @@ class AIProviderPort(ABC):
     @abstractmethod
     async def validate_personality_consistency(
         self,
-        personality_data: PersonalityData,
+        personality_data: AIPersonalityData,
         generated_content: str
     ) -> bool:
         """Validate that content maintains character consistency."""
