@@ -4,7 +4,7 @@ This is the key adapter that hides LangGraph complexity from external consumers.
 """
 from typing import List, Dict, Any, Optional
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.ports.orchestration_service import (
     OrchestrationServicePort, OrchestrationRequest, OrchestrationResult,
@@ -66,7 +66,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
         This is the main entry point - hides all LangGraph complexity!
         """
         try:
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             # Handle different types of requests
             news_items = request.news_items or []
@@ -87,7 +87,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
                 self.orchestration_state = workflow_result["orchestration_state"]
             
             # Calculate execution time
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
             
             # Convert LangGraph results to our clean interface
@@ -127,7 +127,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
                     pending_news_count=0,
                     active_conversations_count=0,
                     api_calls_this_hour=0,
-                    last_activity=datetime.utcnow(),
+                    last_activity=datetime.now(timezone.utc),
                     health_score=0.0
                 )
             
@@ -143,7 +143,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
                 pending_news_count=status_data.get("pending_news", 0),
                 active_conversations_count=status_data.get("active_conversations", 0),
                 api_calls_this_hour=status_data.get("api_calls_this_hour", 0),
-                last_activity=datetime.fromisoformat(status_data.get("last_activity", datetime.utcnow().isoformat())),
+                last_activity=datetime.fromisoformat(status_data.get("last_activity", datetime.now(timezone.utc).isoformat())),
                 health_score=health_score
             )
             
@@ -155,7 +155,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
                 pending_news_count=0,
                 active_conversations_count=0,
                 api_calls_this_hour=0,
-                last_activity=datetime.utcnow(),
+                last_activity=datetime.now(timezone.utc),
                 health_score=0.0
             )
     
@@ -172,7 +172,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
             # Calculate cooldown seconds
             cooldown_seconds = 0
             if agent_state.cooldown_until:
-                remaining = agent_state.cooldown_until - datetime.utcnow()
+                remaining = agent_state.cooldown_until - datetime.now(timezone.utc)
                 cooldown_seconds = max(0, int(remaining.total_seconds()))
             
             return CharacterStatus(
@@ -239,7 +239,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
                 headline="Direct Interaction Request",
                 content=context,
                 source="system",
-                published_at=datetime.utcnow(),
+                published_at=datetime.now(timezone.utc),
                 topics=["forced_interaction"]
             )
             
@@ -272,7 +272,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
             agent_state = self.orchestration_state.character_states.get(character_id)
             if agent_state:
                 # Set a very long cooldown to effectively pause the character
-                agent_state.cooldown_until = datetime.utcnow() + timedelta(days=365)
+                agent_state.cooldown_until = datetime.now(timezone.utc) + timedelta(days=365)
                 return True
             
             return False
@@ -382,7 +382,7 @@ class LangGraphOrchestrationAdapter(OrchestrationServicePort):
             last_activity_str = status_data.get("last_activity")
             if last_activity_str:
                 last_activity = datetime.fromisoformat(last_activity_str)
-                time_since_activity = datetime.utcnow() - last_activity
+                time_since_activity = datetime.now(timezone.utc) - last_activity
                 if time_since_activity > timedelta(hours=1):
                     score -= 0.2
             
