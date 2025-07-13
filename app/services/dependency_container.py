@@ -11,6 +11,7 @@ from app.ports.orchestration_service import OrchestrationServicePort
 from app.adapters.claude_ai_adapter import ClaudeAIAdapter
 from app.adapters.langgraph_orchestration_adapter import LangGraphOrchestrationAdapter
 from app.tools.claude_client import ClaudeClient
+from app.services.personality_config_loader import PersonalityConfigLoader
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,9 @@ class DependencyContainer:
         self.config = config or {}
         self.settings = get_settings()
         self._services: Dict[str, Any] = {}
+        
+        # Register configuration loader
+        self.personality_config_loader = PersonalityConfigLoader()
         
         logger.info("Dependency container initialized")
     
@@ -103,6 +107,15 @@ class DependencyContainer:
             logger.info(f"Created orchestration service: {orchestration_type}")
         
         return self._services["orchestration_service"]
+    
+    @lru_cache(maxsize=1)
+    def get_personality_config_loader(self) -> PersonalityConfigLoader:
+        """
+        Get the personality configuration loader service.
+        
+        This service provides access to personality configurations from JSON files.
+        """
+        return self.personality_config_loader
     
     def _create_mock_ai_provider(self) -> AIProviderPort:
         """Create a mock AI provider for testing."""
