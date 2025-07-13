@@ -5,7 +5,7 @@ Demonstrates realistic news discovery and thread-based engagement.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from app.models.conversation import (
@@ -29,7 +29,7 @@ def create_test_news_items() -> List[NewsItem]:
             content="A major music festival featuring local and international artists will take place in San Juan next month. The event promises to showcase Puerto Rican culture and boost tourism.",
             topics=["music", "entertainment", "culture", "tourism", "san juan"],
             source="Puerto Rico Daily News",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             relevance_score=0.8
         ),
         NewsItem(
@@ -38,7 +38,7 @@ def create_test_news_items() -> List[NewsItem]:
             content="Ongoing construction on Highway 22 in Bayamón is causing significant delays for morning commuters. The project is expected to continue for another 3 months.",
             topics=["traffic", "construction", "bayamón", "transportation", "daily life"],
             source="El Nuevo Día",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             relevance_score=0.6
         ),
         NewsItem(
@@ -47,7 +47,7 @@ def create_test_news_items() -> List[NewsItem]:
             content="The government has announced funding for the restoration of several historic buildings in Old San Juan, preserving Puerto Rico's rich cultural heritage for future generations.",
             topics=["culture", "history", "old san juan", "heritage", "restoration"],
             source="Caribbean Business",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             relevance_score=0.7
         )
     ]
@@ -118,7 +118,7 @@ async def test_thread_based_engagement():
             content="A major music festival featuring local and international artists will take place in San Juan next month.",
             topics=["music", "entertainment", "culture"],
             source="Test",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             relevance_score=0.9
         ),
         conversation_history=[],

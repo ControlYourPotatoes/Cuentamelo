@@ -7,17 +7,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
 from app.models.conversation import ConversationMessage
-
-
-class PersonalityConfig(BaseModel):
-    """Configuration for AI personality generation."""
-    character_name: str
-    personality_traits: str
-    background: str
-    language_style: str
-    topics_of_interest: List[str]
-    interaction_style: str
-    cultural_context: str
+from app.models.personality import PersonalityData
 
 
 class AIResponse(BaseModel):
@@ -39,18 +29,30 @@ class AIProviderPort(ABC):
     @abstractmethod
     async def generate_character_response(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         context: str,
         conversation_history: Optional[List[ConversationMessage]] = None,
-        target_topic: Optional[str] = None
+        target_topic: Optional[str] = None,
+        thread_context: Optional[str] = None,
+        is_new_thread: bool = True
     ) -> AIResponse:
-        """Generate a character response based on personality and context."""
+        """
+        Generate a character response based on personality and context.
+        
+        Args:
+            personality_data: Complete personality configuration for the character
+            context: Content to respond to
+            conversation_history: Previous conversation messages
+            target_topic: Specific topic to focus on
+            thread_context: Context from existing thread (if replying)
+            is_new_thread: Whether this is a new thread or reply
+        """
         pass
     
     @abstractmethod
     async def generate_news_reaction(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         news_headline: str,
         news_content: str,
         emotional_context: str = "neutral"
@@ -61,7 +63,7 @@ class AIProviderPort(ABC):
     @abstractmethod
     async def validate_personality_consistency(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         generated_content: str
     ) -> bool:
         """Validate that content maintains character consistency."""

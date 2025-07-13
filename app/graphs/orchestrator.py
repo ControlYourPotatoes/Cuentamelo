@@ -5,7 +5,7 @@ Coordinates multiple characters, manages news processing, and handles character 
 from typing import Dict, List, Optional, Any, TypedDict
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
@@ -123,7 +123,7 @@ async def initialize_orchestration(state: OrchestrationWorkflowState) -> Orchest
         
         # Update system status
         orchestration_state.orchestration_active = True
-        orchestration_state.last_activity = datetime.utcnow()
+        orchestration_state.last_activity = datetime.now(timezone.utc)
         
         # Initialize workflow state
         state["orchestration_state"] = orchestration_state
@@ -365,7 +365,7 @@ async def update_orchestration_state(state: OrchestrationWorkflowState) -> Orche
         orchestration_state = state["orchestration_state"]
         
         # Update activity timestamp
-        orchestration_state.last_activity = datetime.utcnow()
+        orchestration_state.last_activity = datetime.now(timezone.utc)
         
         # Update performance metrics
         total_reactions = len(state["character_reactions"])
@@ -376,11 +376,11 @@ async def update_orchestration_state(state: OrchestrationWorkflowState) -> Orche
             "total_reactions": orchestration_state.performance_metrics.get("total_reactions", 0) + total_reactions,
             "successful_reactions": orchestration_state.performance_metrics.get("successful_reactions", 0) + successful_reactions,
             "conversation_threads": len(orchestration_state.active_conversations),
-            "last_processing_time": datetime.utcnow().isoformat()
+            "last_processing_time": datetime.now(timezone.utc).isoformat()
         })
         
         # Clean up old conversations (remove inactive ones older than 24 hours)
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
         active_conversations = [
             conv for conv in orchestration_state.active_conversations
             if conv.is_active and conv.last_activity > cutoff_time
@@ -407,7 +407,7 @@ async def cleanup_and_rate_limit(state: OrchestrationWorkflowState) -> Orchestra
         orchestration_state = state["orchestration_state"]
         
         # Rate limiting - reset hourly API call counter if needed
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now > orchestration_state.rate_limit_reset:
             orchestration_state.api_calls_this_hour = 0
             orchestration_state.rate_limit_reset = now + timedelta(hours=1)
@@ -520,13 +520,13 @@ async def execute_orchestration_cycle(
     )
     
     # Execute workflow
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     
     try:
         final_state = await workflow.ainvoke(initial_state)
         
         # Calculate execution time
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
         final_state["execution_time_ms"] = execution_time_ms
         
@@ -538,7 +538,7 @@ async def execute_orchestration_cycle(
         logger.error(f"Orchestration workflow execution failed: {str(e)}")
         
         # Return error state
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
         
         initial_state["error_details"] = str(e)

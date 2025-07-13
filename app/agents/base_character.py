@@ -4,7 +4,7 @@ Integrates with LangGraph workflows and AI providers for authentic character res
 """
 from typing import Dict, List, Optional, Any, Callable
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
 
@@ -371,7 +371,7 @@ class BaseCharacterAgent(ABC):
     def _is_rate_limited(self, state: AgentState) -> bool:
         """Check if character is rate limited."""
         if self.last_interaction_time:
-            time_since_last = datetime.utcnow() - self.last_interaction_time
+            time_since_last = datetime.now(timezone.utc) - self.last_interaction_time
             if time_since_last < timedelta(minutes=self.cooldown_minutes):
                 return True
         
@@ -384,7 +384,7 @@ class BaseCharacterAgent(ABC):
         """Update interaction tracking metrics."""
         self.interaction_count += 1
         self.total_engagements += 1
-        self.last_interaction_time = datetime.utcnow()
+        self.last_interaction_time = datetime.now(timezone.utc)
         
         # Update agent state
         state.interaction_count = self.interaction_count

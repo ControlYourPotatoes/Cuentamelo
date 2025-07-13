@@ -6,7 +6,7 @@ Tests the Puerto Rican AI character platform with sample news and interactions.
 import asyncio
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 # Add the app directory to the Python path
@@ -31,7 +31,7 @@ def create_sample_news_items() -> List[NewsItem]:
                 "incluyendo reggaetón, salsa, y música folklórica puertorriqueña."
             ),
             source="Primera Hora",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             topics=["entertainment", "music", "culture", "san juan"],
             puerto_rico_relevance=0.9
         ),
@@ -45,7 +45,7 @@ def create_sample_news_items() -> List[NewsItem]:
                 "largas filas en las gasolineras más económicas."
             ),
             source="El Nuevo Día",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             topics=["economy", "daily life", "transportation"],
             puerto_rico_relevance=0.95,
             sentiment=MessageSentiment.NEGATIVE
@@ -60,7 +60,7 @@ def create_sample_news_items() -> List[NewsItem]:
                 "ha alcanzado más de 5 millones de visualizaciones."
             ),
             source="Metro PR",
-            published_at=datetime.utcnow(),
+            published_at=datetime.now(timezone.utc),
             topics=["social media", "culture", "youth", "awards"],
             puerto_rico_relevance=0.8,
             sentiment=MessageSentiment.POSITIVE
@@ -88,7 +88,7 @@ async def test_character_workflow():
             "El artista es de Carolina y tiene solo 19 años."
         ),
         source="Reggaeton Blog",
-        published_at=datetime.utcnow(),
+        published_at=datetime.now(timezone.utc),
         topics=["music", "reggaeton", "viral", "youth"],
         puerto_rico_relevance=0.95
     )
