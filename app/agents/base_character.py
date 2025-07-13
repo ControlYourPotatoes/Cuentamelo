@@ -1,6 +1,6 @@
 """
 Base character agent class for Puerto Rican AI personalities.
-Integrates with LangGraph workflows and Claude API for authentic character responses.
+Integrates with LangGraph workflows and AI providers for authentic character responses.
 """
 from typing import Dict, List, Optional, Any, Callable
 from abc import ABC, abstractmethod
@@ -12,9 +12,8 @@ from app.models.conversation import (
     AgentState, ConversationMessage, MessageType, AgentDecision,
     NewsItem, CharacterReaction, is_character_available
 )
-from app.tools.claude_client import (
-    ClaudeClient, PersonalityPrompt, ClaudeResponse, get_claude_client
-)
+from app.models.personality import PersonalityData, get_personality_by_id
+from app.ports.ai_provider import AIProviderPort, AIResponse
 
 logger = logging.getLogger(__name__)
 
@@ -24,49 +23,50 @@ class BaseCharacterAgent(ABC):
     Abstract base class for Puerto Rican AI character agents.
     
     This class provides the foundation for character-specific personalities
-    while integrating with LangGraph workflows and Claude API for response generation.
+    while integrating with LangGraph workflows and AI providers for response generation.
     """
     
     def __init__(
         self,
         character_id: str,
-        character_name: str,
-        personality_traits: str,
-        background: str,
-        language_style: str,
-        topics_of_interest: List[str],
-        interaction_style: str,
-        cultural_context: str,
-        claude_client: Optional[ClaudeClient] = None
+        ai_provider: Optional[AIProviderPort] = None
     ):
         self.character_id = character_id
-        self.character_name = character_name
-        self.personality_prompt = PersonalityPrompt(
-            character_name=character_name,
-            personality_traits=personality_traits,
-            background=background,
-            language_style=language_style,
-            topics_of_interest=topics_of_interest,
-            interaction_style=interaction_style,
-            cultural_context=cultural_context
-        )
-        self.claude_client = claude_client
         
-        # Character-specific configuration
-        self.engagement_threshold = 0.5  # Minimum relevance to engage
-        self.cooldown_minutes = 15  # Minutes between interactions
-        self.max_daily_interactions = 50
-        self.preferred_topics = set(topics_of_interest)
+        # Load personality data
+        self.personality_data = get_personality_by_id(character_id)
+        if not self.personality_data:
+            raise ValueError(f"No personality data found for character: {character_id}")
+        
+        # Inject AI provider dependency
+        self.ai_provider = ai_provider
+        
+        # Character-specific configuration from personality data
+        self.engagement_threshold = self.personality_data.engagement_threshold
+        self.cooldown_minutes = self.personality_data.cooldown_minutes
+        self.max_daily_interactions = self.personality_data.max_daily_interactions
+        self.max_replies_per_thread = self.personality_data.max_replies_per_thread
+        self.preferred_topics = set(self.personality_data.preferred_topics)
         
         # Performance tracking
         self.interaction_count = 0
         self.total_engagements = 0
         self.last_interaction_time: Optional[datetime] = None
         
-    async def initialize_claude_client(self):
-        """Initialize Claude client if not provided."""
-        if not self.claude_client:
-            self.claude_client = await get_claude_client()
+    @property
+    def character_name(self) -> str:
+        """Get character name from personality data."""
+        return self.personality_data.character_name
+    
+    @property
+    def character_type(self) -> str:
+        """Get character type from personality data."""
+        return self.personality_data.character_type
+    
+    async def initialize_ai_provider(self, ai_provider: AIProviderPort):
+        """Initialize AI provider if not provided."""
+        if not self.ai_provider:
+            self.ai_provider = ai_provider
     
     # Abstract methods for character-specific behavior
     
@@ -162,50 +162,45 @@ class BaseCharacterAgent(ABC):
         state: AgentState,
         context: str,
         conversation_history: List[ConversationMessage] = None,
-        target_topic: str = None
-    ) -> ClaudeResponse:
+        target_topic: str = None,
+        thread_context: Optional[str] = None,
+        is_new_thread: bool = True
+    ) -> AIResponse:
         """
-        Generate a character response using Claude API.
+        Generate a character response using AI provider.
         
         Args:
             state: Current agent state
             context: Context for the response
             conversation_history: Previous conversation messages
             target_topic: Specific topic to focus on
+            thread_context: Context from existing thread (if replying)
+            is_new_thread: Whether this is a new thread or reply
             
         Returns:
-            ClaudeResponse: Generated response with metadata
+            AIResponse: Generated response with metadata
         """
-        await self.initialize_claude_client()
+        if not self.ai_provider:
+            raise ValueError("AI provider not initialized")
         
         try:
             # Add character-specific context
             enhanced_context = self.get_character_specific_context(context)
             
-            # Convert conversation history to Claude format
-            claude_history = []
-            if conversation_history:
-                claude_history = [
-                    {
-                        "speaker": msg.character_name,
-                        "content": msg.content,
-                        "timestamp": msg.timestamp.isoformat()
-                    }
-                    for msg in conversation_history[-10:]  # Last 10 messages
-                ]
-            
-            # Generate response
-            response = await self.claude_client.generate_character_response(
-                character_prompt=self.personality_prompt,
+            # Generate response using AI provider
+            response = await self.ai_provider.generate_character_response(
+                personality_data=self.personality_data,
                 context=enhanced_context,
-                conversation_history=claude_history,
-                target_topic=target_topic
+                conversation_history=conversation_history,
+                target_topic=target_topic,
+                thread_context=thread_context,
+                is_new_thread=is_new_thread
             )
             
             # Update state with response info
             state.generated_content = response.content
             state.personality_consistency_score = response.confidence_score
-            state.response_time_ms = response.response_time_ms
+            state.response_time_ms = response.metadata.get("response_time_ms", 0)
             state.content_approved = response.character_consistency
             
             return response
@@ -217,12 +212,11 @@ class BaseCharacterAgent(ABC):
             
             # Return fallback response
             fallback_content = self._get_fallback_response(context)
-            return ClaudeResponse(
+            return AIResponse(
                 content=fallback_content,
                 confidence_score=0.0,
                 character_consistency=False,
-                estimated_tokens=0,
-                response_time_ms=0
+                metadata={"error": str(e), "fallback": True}
             )
     
     async def react_to_news(
@@ -242,7 +236,8 @@ class BaseCharacterAgent(ABC):
         Returns:
             CharacterReaction: The character's reaction
         """
-        await self.initialize_claude_client()
+        if not self.ai_provider:
+            raise ValueError("AI provider not initialized")
         
         try:
             # Make engagement decision first
@@ -252,37 +247,46 @@ class BaseCharacterAgent(ABC):
                 news_item=news_item
             )
             
-            reaction_content = ""
-            confidence_score = 0.0
-            
-            if decision == AgentDecision.ENGAGE:
-                # Generate news reaction
-                response = await self.claude_client.generate_news_reaction(
-                    character_prompt=self.personality_prompt,
-                    news_headline=news_item.headline,
-                    news_content=news_item.content,
-                    emotional_context=emotional_context
+            if decision != AgentDecision.ENGAGE:
+                return CharacterReaction(
+                    character_id=self.character_id,
+                    character_name=self.character_name,
+                    news_item_id=news_item.id,
+                    reaction_content="",
+                    decision=decision,
+                    confidence_score=state.decision_confidence,
+                    reasoning=state.decision_reasoning
                 )
-                
-                reaction_content = response.content
-                confidence_score = response.confidence_score
-                
-                # Update interaction tracking
-                self._update_interaction_tracking(state)
             
-            return CharacterReaction(
+            # Generate reaction using AI provider
+            response = await self.ai_provider.generate_news_reaction(
+                personality_data=self.personality_data,
+                news_headline=news_item.headline,
+                news_content=news_item.content,
+                emotional_context=emotional_context
+            )
+            
+            # Create character reaction
+            reaction = CharacterReaction(
                 character_id=self.character_id,
                 character_name=self.character_name,
                 news_item_id=news_item.id,
-                reaction_content=reaction_content,
+                reaction_content=response.content,
                 decision=decision,
-                confidence_score=confidence_score,
-                reasoning=state.decision_reasoning,
-                engagement_prediction=state.decision_confidence
+                confidence_score=response.confidence_score,
+                reasoning=f"Generated reaction with {response.confidence_score:.2f} confidence"
             )
+            
+            # Update interaction tracking
+            self._update_interaction_tracking(state)
+            
+            return reaction
             
         except Exception as e:
             logger.error(f"Error generating news reaction for {self.character_name}: {str(e)}")
+            state.error_message = str(e)
+            state.error_count += 1
+            
             return CharacterReaction(
                 character_id=self.character_id,
                 character_name=self.character_name,
@@ -290,8 +294,7 @@ class BaseCharacterAgent(ABC):
                 reaction_content="",
                 decision=AgentDecision.DEFER,
                 confidence_score=0.0,
-                reasoning=f"Error: {str(e)}",
-                engagement_prediction=0.0
+                reasoning=f"Error: {str(e)}"
             )
     
     async def reply_to_conversation(
@@ -299,133 +302,121 @@ class BaseCharacterAgent(ABC):
         state: AgentState,
         conversation_thread: List[ConversationMessage],
         original_post: str,
-        reply_to_character: str
+        reply_to_character: str,
+        thread_context: Optional[str] = None
     ) -> Optional[ConversationMessage]:
         """
-        Generate a reply in an ongoing conversation.
+        Generate a reply to an existing conversation thread.
         
         Args:
             state: Current agent state
-            conversation_thread: Full conversation history
-            original_post: The original post that started the conversation
+            conversation_thread: Thread of conversation messages
+            original_post: Original post content
             reply_to_character: Character being replied to
+            thread_context: Context from the thread
             
         Returns:
-            ConversationMessage or None if not engaging
+            ConversationMessage: Generated reply message
         """
-        await self.initialize_claude_client()
-        
         try:
-            # Make engagement decision
-            decision = await self.make_engagement_decision(
-                state=state,
+            # Check if we should engage with this thread
+            engagement_prob = self.calculate_engagement_probability(
                 context=original_post,
                 conversation_history=conversation_thread
             )
             
-            if decision != AgentDecision.ENGAGE:
+            if engagement_prob < self.engagement_threshold:
+                logger.info(f"{self.character_name} not engaging with thread (low relevance)")
                 return None
             
-            # Generate conversation reply
-            response = await self.claude_client.generate_conversation_reply(
-                character_prompt=self.personality_prompt,
-                original_post=original_post,
-                conversation_thread=[
-                    {
-                        "speaker": msg.character_name,
-                        "content": msg.content,
-                        "timestamp": msg.timestamp.isoformat()
-                    }
-                    for msg in conversation_thread
-                ],
-                reply_to_character=reply_to_character
+            # Generate reply
+            response = await self.generate_response(
+                state=state,
+                context=original_post,
+                conversation_history=conversation_thread,
+                target_topic="conversation_reply",
+                thread_context=thread_context,
+                is_new_thread=False
             )
             
-            if not response.character_consistency:
-                logger.warning(f"Personality inconsistency detected for {self.character_name}")
+            if not response.content or response.confidence_score < 0.3:
+                logger.info(f"{self.character_name} generated low-quality reply, skipping")
                 return None
             
-            # Update interaction tracking
-            self._update_interaction_tracking(state)
-            
-            # Find the message being replied to
-            parent_message_id = None
-            if conversation_thread:
-                # Reply to the last message from the target character
-                for msg in reversed(conversation_thread):
-                    if msg.character_name == reply_to_character:
-                        parent_message_id = msg.id
-                        break
-            
-            return ConversationMessage(
+            # Create conversation message
+            message = ConversationMessage(
                 character_id=self.character_id,
                 character_name=self.character_name,
                 content=response.content,
                 message_type=MessageType.CHARACTER_REPLY,
-                parent_message_id=parent_message_id,
-                engagement_score=response.confidence_score
+                parent_message_id=conversation_thread[-1].id if conversation_thread else None,
+                engagement_score=response.confidence_score,
+                metadata={
+                    "reply_to": reply_to_character,
+                    "thread_context": thread_context is not None,
+                    "personality_consistency": response.character_consistency
+                }
             )
+            
+            # Update interaction tracking
+            self._update_interaction_tracking(state)
+            
+            return message
             
         except Exception as e:
             logger.error(f"Error generating conversation reply for {self.character_name}: {str(e)}")
+            state.error_message = str(e)
             return None
-    
-    # Helper methods
     
     def _is_rate_limited(self, state: AgentState) -> bool:
         """Check if character is rate limited."""
-        # Check daily interaction limit
-        if state.interaction_count >= self.max_daily_interactions:
-            return True
+        if self.last_interaction_time:
+            time_since_last = datetime.utcnow() - self.last_interaction_time
+            if time_since_last < timedelta(minutes=self.cooldown_minutes):
+                return True
         
-        # Check cooldown period
-        if (state.last_interaction_time and 
-            datetime.utcnow() - state.last_interaction_time < timedelta(minutes=self.cooldown_minutes)):
+        if self.interaction_count >= self.max_daily_interactions:
             return True
         
         return False
     
     def _update_interaction_tracking(self, state: AgentState):
         """Update interaction tracking metrics."""
-        state.interaction_count += 1
-        state.last_interaction_time = datetime.utcnow()
-        state.cooldown_until = datetime.utcnow() + timedelta(minutes=self.cooldown_minutes)
-        
-        # Update performance metrics
         self.interaction_count += 1
+        self.total_engagements += 1
         self.last_interaction_time = datetime.utcnow()
+        
+        # Update agent state
+        state.interaction_count = self.interaction_count
+        state.last_interaction_time = self.last_interaction_time
+        state.engagement_rate = self.total_engagements / max(self.interaction_count, 1)
     
     def _get_fallback_response(self, context: str) -> str:
-        """Get a fallback response when Claude API fails."""
-        fallback_responses = [
-            f"Ay, perdón - {self.character_name} está teniendo problemas técnicos 🤖",
-            f"Dame un momentito, {self.character_name} needs a quick reset ⚡",
-            f"¡Wepa! Sistema temporalmente down - {self.character_name} volverá pronto 💪"
-        ]
+        """Get fallback response when AI generation fails."""
+        # Use personality data to generate appropriate fallback
+        if self.personality_data.signature_phrases:
+            signature = self.personality_data.signature_phrases[0]
+            return f"{signature} [Response temporarily unavailable]"
         
-        import random
-        return random.choice(fallback_responses)
-    
-    # Character information methods
+        return f"[{self.character_name} response temporarily unavailable]"
     
     def get_character_summary(self) -> Dict[str, Any]:
-        """Get a summary of this character's configuration and stats."""
+        """Get character summary information."""
         return {
             "character_id": self.character_id,
             "character_name": self.character_name,
-            "personality_traits": self.personality_prompt.personality_traits,
-            "background": self.personality_prompt.background,
-            "topics_of_interest": self.personality_prompt.topics_of_interest,
-            "interaction_style": self.personality_prompt.interaction_style,
+            "character_type": self.character_type,
             "engagement_threshold": self.engagement_threshold,
             "cooldown_minutes": self.cooldown_minutes,
             "max_daily_interactions": self.max_daily_interactions,
-            "total_interactions": self.interaction_count,
-            "last_interaction": self.last_interaction_time.isoformat() if self.last_interaction_time else None
+            "interaction_count": self.interaction_count,
+            "total_engagements": self.total_engagements,
+            "preferred_topics": list(self.preferred_topics),
+            "personality_traits": self.personality_data.personality_traits[:100] + "..." if len(self.personality_data.personality_traits) > 100 else self.personality_data.personality_traits
         }
     
     def __str__(self) -> str:
-        return f"CharacterAgent({self.character_name}, ID: {self.character_id})"
+        return f"{self.character_name} ({self.character_type})"
     
     def __repr__(self) -> str:
-        return self.__str__() 
+        return f"BaseCharacterAgent(character_id='{self.character_id}', character_name='{self.character_name}')" 
