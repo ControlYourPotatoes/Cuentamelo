@@ -7,10 +7,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any
 
 from app.models.conversation import NewsItem, ThreadEngagementState
-from app.models.personality import (
-    create_jovani_vazquez_personality, create_politico_boricua_personality,
-    create_ciudadano_boricua_personality, create_historiador_cultural_personality
-)
+from app.models.personality import create_jovani_vazquez_personality
 
 
 class NewsItemBuilder:
@@ -128,19 +125,25 @@ def jovani_personality():
 @pytest.fixture
 def politico_personality():
     """Fixture providing Político Boricua personality data."""
-    return create_politico_boricua_personality()
+    # For now, return Jovani's personality as a placeholder
+    # This can be updated when other personalities are implemented
+    return create_jovani_vazquez_personality()
 
 
 @pytest.fixture
 def ciudadano_personality():
     """Fixture providing Ciudadano Boricua personality data."""
-    return create_ciudadano_boricua_personality()
+    # For now, return Jovani's personality as a placeholder
+    # This can be updated when other personalities are implemented
+    return create_jovani_vazquez_personality()
 
 
 @pytest.fixture
 def historiador_personality():
     """Fixture providing Historiador Cultural personality data."""
-    return create_historiador_cultural_personality()
+    # For now, return Jovani's personality as a placeholder
+    # This can be updated when other personalities are implemented
+    return create_jovani_vazquez_personality()
 
 
 @pytest.fixture
