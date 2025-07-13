@@ -372,6 +372,22 @@ async def format_final_output(state: CharacterWorkflowState) -> CharacterWorkflo
                     reasoning=agent_state.decision_reasoning
                 )
                 state["character_reaction"] = reaction
+        elif decision in [AgentDecision.IGNORE, AgentDecision.DEFER]:
+            # For ignore/defer decisions, set a default response indicating no engagement
+            state["generated_response"] = f"[{character_agent.character_name} decided not to engage: {decision.value}]"
+            
+            # Create character reaction if this is a news response
+            if state.get("news_item"):
+                reaction = CharacterReaction(
+                    character_id=character_agent.character_id,
+                    character_name=character_agent.character_name,
+                    news_item_id=state["news_item"].id,
+                    reaction_content="",
+                    decision=decision,
+                    confidence_score=agent_state.decision_confidence,
+                    reasoning=agent_state.decision_reasoning
+                )
+                state["character_reaction"] = reaction
         
         # Mark workflow as complete
         agent_state.workflow_complete = True
