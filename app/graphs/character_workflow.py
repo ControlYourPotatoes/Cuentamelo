@@ -5,14 +5,14 @@ Manages the complete character response lifecycle from content analysis to posti
 from typing import Dict, List, Optional, Any, TypedDict
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from app.models.conversation import (
     AgentState, ConversationMessage, NewsItem, CharacterReaction,
-    AgentDecision, create_agent_state
+    AgentDecision, create_agent_state, ThreadEngagementState, MessageType
 )
 from app.agents.base_character import BaseCharacterAgent
 
@@ -28,11 +28,11 @@ class CharacterWorkflowState(TypedDict):
     conversation_history: Optional[List[ConversationMessage]]
     target_topic: Optional[str]
     
-    # Thread Context (NEW)
+    # Thread Context (ENHANCED)
     thread_id: Optional[str]
     thread_context: Optional[str]
     is_new_thread: bool
-    thread_engagement_state: Optional[Any]  # ThreadEngagementState
+    thread_engagement_state: Optional[ThreadEngagementState]
     
     # Agent State
     agent_state: AgentState
@@ -116,7 +116,7 @@ def create_character_workflow() -> StateGraph:
 async def initialize_agent_state(state: CharacterWorkflowState) -> CharacterWorkflowState:
     """Initialize the agent state for workflow execution."""
     try:
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         character_agent = state["character_agent"]
         
@@ -134,6 +134,14 @@ async def initialize_agent_state(state: CharacterWorkflowState) -> CharacterWork
         agent_state.current_step = "initialize"
         agent_state.workflow_complete = False
         agent_state.error_message = None
+        
+        # Initialize thread engagement state if needed
+        if state.get("is_new_thread", True) and not state.get("thread_engagement_state"):
+            thread_id = state.get("thread_id", f"thread_{datetime.now(timezone.utc).timestamp()}")
+            state["thread_engagement_state"] = ThreadEngagementState(
+                thread_id=thread_id,
+                original_content=state["input_context"]
+            )
         
         state["agent_state"] = agent_state
         state["workflow_step"] = "initialize"
@@ -173,7 +181,9 @@ async def analyze_context_relevance(state: CharacterWorkflowState) -> CharacterW
             "engagement_probability": engagement_prob,
             "context_length": len(context),
             "has_news_item": news_item is not None,
-            "has_conversation_history": bool(state.get("conversation_history"))
+            "has_conversation_history": bool(state.get("conversation_history")),
+            "is_new_thread": state.get("is_new_thread", True),
+            "thread_aware": state.get("thread_engagement_state") is not None
         }
         
         state["agent_state"] = agent_state
@@ -191,13 +201,23 @@ async def analyze_context_relevance(state: CharacterWorkflowState) -> CharacterW
 
 
 async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Make the engagement decision based on context analysis."""
+    """Make the engagement decision based on context analysis and thread state."""
     try:
         character_agent = state["character_agent"]
         agent_state = state["agent_state"]
         context = state["input_context"]
+        thread_state = state.get("thread_engagement_state")
+        is_new_thread = state.get("is_new_thread", True)
         
         agent_state.current_step = "make_decision"
+        
+        # Check thread engagement limits if this is a reply
+        if not is_new_thread and thread_state:
+            if not thread_state.can_character_reply(character_agent.character_id):
+                logger.info(f"{character_agent.character_name} cannot reply - thread limit reached")
+                state["engagement_decision"] = AgentDecision.DEFER
+                state["workflow_step"] = "make_decision"
+                return state
         
         # Make engagement decision
         decision = await character_agent.make_engagement_decision(
@@ -224,48 +244,40 @@ async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWo
 
 
 async def generate_character_response(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Generate character response using Claude API with thread awareness."""
+    """Generate character response using AI provider with thread awareness."""
     try:
         character_agent = state["character_agent"]
         agent_state = state["agent_state"]
         context = state["input_context"]
+        thread_state = state.get("thread_engagement_state")
+        is_new_thread = state.get("is_new_thread", True)
         
         agent_state.current_step = "generate_response"
         
-        # THREAD-AWARE CONTEXT ENHANCEMENT
-        enhanced_context = context
-        
-        # Check if this is a thread reply
-        if state.get("thread_engagement_state") and not state.get("is_new_thread", True):
-            thread_state = state["thread_engagement_state"]
+        # Get thread context for replies
+        thread_context = None
+        if not is_new_thread and thread_state:
             thread_context = thread_state.get_thread_context(character_agent.character_id)
-            enhanced_context = f"Thread context: {thread_context}\n\nOriginal content: {context}"
-            
-            # Add Twitter-specific context
-            enhanced_context += "\n\nIMPORTANT: This is a reply to an existing Twitter thread. Keep your response concise and engaging. Reference the thread context naturally."
-        else:
-            # New thread - add Twitter context
-            enhanced_context += "\n\nIMPORTANT: This is a new Twitter post. Make it engaging and start a conversation. Use appropriate hashtags and mentions if relevant."
         
         # Generate response using character agent
-        claude_response = await character_agent.generate_response(
+        response = await character_agent.generate_response(
             state=agent_state,
-            context=enhanced_context,
+            context=context,
             conversation_history=state.get("conversation_history"),
-            target_topic=state.get("target_topic")
+            target_topic=state.get("target_topic"),
+            thread_context=thread_context,
+            is_new_thread=is_new_thread
         )
         
-        # Store generated content
-        agent_state.generated_content = claude_response.content
-        agent_state.personality_consistency_score = claude_response.confidence_score
-        agent_state.response_time_ms = claude_response.response_time_ms
-        agent_state.content_approved = claude_response.character_consistency
-        
-        state["agent_state"] = agent_state
-        state["generated_response"] = claude_response.content
+        # Store response
+        state["generated_response"] = response.content
         state["workflow_step"] = "generate_response"
         
-        logger.info(f"Generated {'thread reply' if not state.get('is_new_thread', True) else 'new post'} for {character_agent.character_name}: {len(claude_response.content)} chars")
+        # Update thread state if this is a reply
+        if not is_new_thread and thread_state and response.content:
+            thread_state.add_character_reply(character_agent.character_id, response.content)
+        
+        logger.info(f"Generated response for {character_agent.character_name}: {len(response.content)} chars")
         
         return state
         
@@ -277,47 +289,39 @@ async def generate_character_response(state: CharacterWorkflowState) -> Characte
 
 
 async def validate_response_consistency(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Validate response for personality consistency and quality."""
+    """Validate that the generated response maintains character consistency."""
     try:
         character_agent = state["character_agent"]
         agent_state = state["agent_state"]
+        generated_response = state.get("generated_response")
         
         agent_state.current_step = "validate_response"
         
-        generated_response = state.get("generated_response", "")
+        if not generated_response:
+            state["workflow_step"] = "validate_response"
+            return state
         
-        # Basic validation checks
-        is_valid = True
-        validation_issues = []
-        
-        # Check response length
-        if len(generated_response.strip()) < 10:
-            is_valid = False
-            validation_issues.append("Response too short")
-        
-        if len(generated_response) > agent_state.max_response_length:
-            is_valid = False
-            validation_issues.append("Response too long")
-        
-        # Check personality consistency score
-        if agent_state.personality_consistency_score < 0.6:
-            is_valid = False
-            validation_issues.append("Low personality consistency")
-        
-        # Check for obvious errors
-        if "[error" in generated_response.lower():
-            is_valid = False
-            validation_issues.append("Contains error message")
+        # Validate personality consistency using AI provider
+        if character_agent.ai_provider:
+            is_consistent = await character_agent.ai_provider.validate_personality_consistency(
+                personality_data=character_agent.personality_data,
+                generated_content=generated_response
+            )
+        else:
+            # Fallback validation - check for signature phrases
+            is_consistent = any(
+                phrase.lower() in generated_response.lower() 
+                for phrase in character_agent.personality_data.signature_phrases[:3]
+            )
         
         # Update agent state
-        agent_state.content_approved = is_valid
-        if validation_issues:
-            agent_state.error_message = "; ".join(validation_issues)
+        agent_state.content_approved = is_consistent
+        agent_state.personality_consistency_score = 1.0 if is_consistent else 0.0
         
         state["agent_state"] = agent_state
         state["workflow_step"] = "validate_response"
         
-        logger.info(f"Response validation for {character_agent.character_name}: {'valid' if is_valid else 'invalid'}")
+        logger.info(f"Response validation for {character_agent.character_name}: {'valid' if is_consistent else 'invalid'}")
         
         return state
         
@@ -329,49 +333,49 @@ async def validate_response_consistency(state: CharacterWorkflowState) -> Charac
 
 
 async def format_final_output(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Format the final output based on workflow results."""
+    """Format the final output message."""
     try:
         character_agent = state["character_agent"]
         agent_state = state["agent_state"]
+        decision = state.get("engagement_decision")
+        generated_response = state.get("generated_response")
         
         agent_state.current_step = "format_output"
         
-        # Create final message if response was generated and approved
-        final_message = None
-        character_reaction = None
-        
-        if (state["engagement_decision"] == AgentDecision.ENGAGE and 
-            agent_state.content_approved and 
-            state.get("generated_response")):
-            
+        if decision == AgentDecision.ENGAGE and generated_response:
             # Create conversation message
-            final_message = ConversationMessage(
+            message = ConversationMessage(
                 character_id=character_agent.character_id,
                 character_name=character_agent.character_name,
-                content=state["generated_response"],
-                message_type=state.get("message_type", "character_reply"),
-                engagement_score=agent_state.personality_consistency_score
+                content=generated_response,
+                message_type=MessageType.CHARACTER_REPLY if not state.get("is_new_thread", True) else MessageType.CONVERSATION_START,
+                engagement_score=agent_state.personality_consistency_score,
+                metadata={
+                    "thread_id": state.get("thread_id"),
+                    "is_new_thread": state.get("is_new_thread", True),
+                    "personality_consistency": agent_state.content_approved,
+                    "response_time_ms": agent_state.response_time_ms
+                }
             )
             
-            # Create character reaction if this was a news response
+            state["final_message"] = message
+            
+            # Create character reaction if this is a news response
             if state.get("news_item"):
-                character_reaction = CharacterReaction(
+                reaction = CharacterReaction(
                     character_id=character_agent.character_id,
                     character_name=character_agent.character_name,
                     news_item_id=state["news_item"].id,
-                    reaction_content=state["generated_response"],
-                    decision=state["engagement_decision"],
-                    confidence_score=agent_state.personality_consistency_score,
+                    reaction_content=generated_response,
+                    decision=decision,
+                    confidence_score=agent_state.decision_confidence,
                     reasoning=agent_state.decision_reasoning
                 )
+                state["character_reaction"] = reaction
         
         # Mark workflow as complete
         agent_state.workflow_complete = True
-        agent_state.current_step = "complete"
-        
         state["agent_state"] = agent_state
-        state["final_message"] = final_message
-        state["character_reaction"] = character_reaction
         state["workflow_step"] = "format_output"
         state["success"] = True
         
@@ -387,39 +391,36 @@ async def format_final_output(state: CharacterWorkflowState) -> CharacterWorkflo
 
 
 async def handle_workflow_error(state: CharacterWorkflowState) -> CharacterWorkflowState:
-    """Handle workflow errors and provide fallback response."""
+    """Handle workflow errors gracefully."""
     try:
         character_agent = state["character_agent"]
-        agent_state = state["agent_state"]
+        agent_state = state.get("agent_state")
         
-        agent_state.current_step = "handle_error"
-        agent_state.workflow_complete = True
-        agent_state.error_count += 1
+        if agent_state:
+            agent_state.current_step = "error"
+            agent_state.workflow_complete = True
+            agent_state.error_message = state.get("error_details", "Unknown error")
+            state["agent_state"] = agent_state
         
-        # Log error details
-        error_msg = state.get("error_details", "Unknown error")
-        logger.error(f"Workflow error for {character_agent.character_name}: {error_msg}")
-        
-        state["agent_state"] = agent_state
         state["workflow_step"] = "handle_error"
         state["success"] = False
+        
+        logger.error(f"Workflow error for {character_agent.character_name}: {state.get('error_details')}")
         
         return state
         
     except Exception as e:
         logger.error(f"Error in error handler: {str(e)}")
-        state["error_details"] = f"Error handler failed: {str(e)}"
+        state["error_details"] = str(e)
+        state["success"] = False
         return state
 
 
-# Conditional routing functions
+# Routing functions
 
 def route_after_decision(state: CharacterWorkflowState) -> str:
     """Route workflow based on engagement decision."""
     decision = state.get("engagement_decision")
-    
-    if not decision:
-        return "error"
     
     if decision == AgentDecision.ENGAGE:
         return "engage"
@@ -432,7 +433,7 @@ def route_after_decision(state: CharacterWorkflowState) -> str:
 
 
 def route_after_validation(state: CharacterWorkflowState) -> str:
-    """Route workflow based on validation results."""
+    """Route workflow based on response validation."""
     agent_state = state.get("agent_state")
     
     if not agent_state:
@@ -440,79 +441,117 @@ def route_after_validation(state: CharacterWorkflowState) -> str:
     
     if agent_state.content_approved:
         return "valid"
-    elif agent_state.error_count >= 3:  # Max retries reached
-        return "error"
     else:
-        return "invalid"  # Retry generation
+        # Retry generation if not consistent
+        retry_count = state.get("retry_count", 0)
+        if retry_count < 2:  # Max 2 retries
+            state["retry_count"] = retry_count + 1
+            return "invalid"
+        else:
+            return "error"
 
 
-# Workflow execution helper
+# Main execution function
 
 async def execute_character_workflow(
     character_agent: BaseCharacterAgent,
     input_context: str,
     news_item: Optional[NewsItem] = None,
     conversation_history: Optional[List[ConversationMessage]] = None,
-    target_topic: Optional[str] = None
+    target_topic: Optional[str] = None,
+    thread_id: Optional[str] = None,
+    thread_context: Optional[str] = None,
+    is_new_thread: bool = True,
+    thread_engagement_state: Optional[ThreadEngagementState] = None,
+    workflow_executor: Optional['WorkflowExecutorPort'] = None
 ) -> CharacterWorkflowState:
     """
-    Execute the character workflow for given input.
+    Execute the complete character workflow.
     
     Args:
         character_agent: The character agent to execute
-        input_context: Context to respond to
-        news_item: Optional news item for news reactions
-        conversation_history: Optional conversation history
-        target_topic: Optional target topic focus
+        input_context: Content to respond to
+        news_item: News item if this is a news reaction
+        conversation_history: Previous conversation messages
+        target_topic: Specific topic to focus on
+        thread_id: Thread identifier for replies
+        thread_context: Context from existing thread
+        is_new_thread: Whether this is a new thread or reply
+        thread_engagement_state: Thread engagement state for rate limiting
+        workflow_executor: Workflow executor (injected dependency)
         
     Returns:
-        CharacterWorkflowState: Final workflow state
+        CharacterWorkflowState: Complete workflow result
     """
-    workflow = create_character_workflow()
-    
-    # Initialize workflow state
-    initial_state = CharacterWorkflowState(
-        character_agent=character_agent,
-        input_context=input_context,
-        news_item=news_item,
-        conversation_history=conversation_history,
-        target_topic=target_topic,
-        agent_state=create_agent_state(
-            character_agent.character_id,
-            character_agent.character_name
-        ),
-        engagement_decision=None,
-        generated_response=None,
-        character_reaction=None,
-        final_message=None,
-        workflow_step="start",
-        execution_time_ms=0,
-        error_details=None,
-        success=False
-    )
-    
-    # Execute workflow
-    start_time = datetime.utcnow()
-    
     try:
-        final_state = await workflow.ainvoke(initial_state)
+        # Create workflow state
+        workflow_state = CharacterWorkflowState(
+            character_agent=character_agent,
+            input_context=input_context,
+            news_item=news_item,
+            conversation_history=conversation_history or [],
+            target_topic=target_topic,
+            thread_id=thread_id,
+            thread_context=thread_context,
+            is_new_thread=is_new_thread,
+            thread_engagement_state=thread_engagement_state,
+            agent_state=None,
+            engagement_decision=None,
+            generated_response=None,
+            character_reaction=None,
+            final_message=None,
+            workflow_step="",
+            execution_time_ms=0,
+            error_details=None,
+            success=False
+        )
         
-        # Calculate execution time
-        end_time = datetime.utcnow()
-        execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
-        final_state["execution_time_ms"] = execution_time_ms
+        # Create workflow
+        workflow = create_character_workflow()
         
-        return final_state
+        # Use injected workflow executor or create default
+        if workflow_executor is None:
+            from app.adapters.langgraph_workflow_adapter import LangGraphWorkflowAdapter
+            workflow_executor = LangGraphWorkflowAdapter()
+        
+        # Execute workflow using the executor
+        execution_result = await workflow_executor.execute_workflow(
+            workflow_definition=workflow,
+            initial_state=workflow_state
+        )
+        
+        # Extract result
+        if execution_result.success:
+            result = execution_result.final_state
+            result["execution_time_ms"] = execution_result.execution_time_ms
+            return result
+        else:
+            # Return error state
+            workflow_state["workflow_step"] = "error"
+            workflow_state["execution_time_ms"] = execution_result.execution_time_ms
+            workflow_state["error_details"] = execution_result.error_details
+            workflow_state["success"] = False
+            return workflow_state
         
     except Exception as e:
-        logger.error(f"Workflow execution failed: {str(e)}")
-        
-        # Return error state
-        end_time = datetime.utcnow()
-        execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
-        
-        initial_state["error_details"] = str(e)
-        initial_state["execution_time_ms"] = execution_time_ms
-        initial_state["success"] = False
-        
-        return initial_state 
+        logger.error(f"Error executing character workflow: {str(e)}")
+        return CharacterWorkflowState(
+            character_agent=character_agent,
+            input_context=input_context,
+            news_item=news_item,
+            conversation_history=conversation_history or [],
+            target_topic=target_topic,
+            thread_id=thread_id,
+            thread_context=thread_context,
+            is_new_thread=is_new_thread,
+            thread_engagement_state=thread_engagement_state,
+            agent_state=None,
+            engagement_decision=None,
+            generated_response=None,
+            character_reaction=None,
+            final_message=None,
+            workflow_step="error",
+            execution_time_ms=0,
+            error_details=str(e),
+            success=False
+        ) 

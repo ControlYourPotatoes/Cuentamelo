@@ -480,7 +480,8 @@ def route_after_news_processing(state: OrchestrationWorkflowState) -> str:
 
 async def execute_orchestration_cycle(
     news_items: List[NewsItem] = None,
-    existing_state: Optional[OrchestrationState] = None
+    existing_state: Optional[OrchestrationState] = None,
+    workflow_executor: Optional['WorkflowExecutorPort'] = None
 ) -> OrchestrationWorkflowState:
     """
     Execute a complete orchestration cycle.
@@ -488,6 +489,7 @@ async def execute_orchestration_cycle(
     Args:
         news_items: List of news items to process
         existing_state: Existing orchestration state to continue from
+        workflow_executor: Workflow executor (injected dependency)
         
     Returns:
         OrchestrationWorkflowState: Final workflow state
@@ -519,32 +521,29 @@ async def execute_orchestration_cycle(
         success=False
     )
     
-    # Execute workflow
-    start_time = datetime.now(timezone.utc)
+    # Use injected workflow executor or create default
+    if workflow_executor is None:
+        from app.adapters.langgraph_workflow_adapter import LangGraphWorkflowAdapter
+        workflow_executor = LangGraphWorkflowAdapter()
     
-    try:
-        final_state = await workflow.ainvoke(initial_state)
-        
-        # Calculate execution time
-        end_time = datetime.now(timezone.utc)
-        execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
-        final_state["execution_time_ms"] = execution_time_ms
-        
-        logger.info(f"Orchestration cycle completed in {execution_time_ms}ms")
-        
+    # Execute workflow using the executor
+    execution_result = await workflow_executor.execute_workflow(
+        workflow_definition=workflow,
+        initial_state=initial_state
+    )
+    
+    # Extract result
+    if execution_result.success:
+        final_state = execution_result.final_state
+        final_state["execution_time_ms"] = execution_result.execution_time_ms
+        logger.info(f"Orchestration cycle completed in {execution_result.execution_time_ms}ms")
         return final_state
-        
-    except Exception as e:
-        logger.error(f"Orchestration workflow execution failed: {str(e)}")
-        
+    else:
         # Return error state
-        end_time = datetime.now(timezone.utc)
-        execution_time_ms = int((end_time - start_time).total_seconds() * 1000)
-        
-        initial_state["error_details"] = str(e)
-        initial_state["execution_time_ms"] = execution_time_ms
+        initial_state["error_details"] = execution_result.error_details
+        initial_state["execution_time_ms"] = execution_result.execution_time_ms
         initial_state["success"] = False
-        
+        logger.error(f"Orchestration workflow execution failed: {execution_result.error_details}")
         return initial_state
 
 
