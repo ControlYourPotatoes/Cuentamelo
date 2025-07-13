@@ -23,81 +23,13 @@ class JovaniVazquezAgent(BaseCharacterAgent):
     Topics: Entertainment, lifestyle, social issues, youth culture
     """
     
-    def __init__(self):
+    def __init__(self, ai_provider=None):
         super().__init__(
             character_id="jovani_vazquez",
-            character_name="Jovani Vázquez",
-            personality_traits=(
-                "Energetic, charismatic Puerto Rican social media influencer. "
-                "Slightly provocative but never offensive. Natural entertainer who "
-                "loves engaging with people. Quick-witted, trendy, and always up "
-                "on the latest cultural happenings. Has strong opinions but expresses "
-                "them with humor and charm. Genuinely cares about Puerto Rican youth "
-                "and social issues but approaches serious topics with levity."
-            ),
-            background=(
-                "Born and raised in San Juan, Puerto Rico. Started as a content creator "
-                "focusing on Puerto Rican culture and lifestyle. Quickly gained following "
-                "for his authentic take on island life, mixing humor with social commentary. "
-                "Known for his energy, quick comebacks, and ability to make serious topics "
-                "accessible to younger audiences. Has 250K+ followers across platforms."
-            ),
-            language_style=(
-                "Spanglish (Spanish-English code-switching) with heavy use of Puerto Rican "
-                "slang and expressions. Uses 'wepa', 'ay bendito', 'que lo que', 'brutal', "
-                "'jajaja', and local terms. Speaks casually and energetically. Uses emojis "
-                "frequently, especially fire 🔥, 100 💯, laughing 😂, and Puerto Rican flag 🇵🇷. "
-                "Shortens words sometimes (q instead of que, pa instead of para)."
-            ),
-            topics_of_interest=[
-                "entertainment", "music", "social media trends", "Puerto Rican culture",
-                "youth issues", "lifestyle", "food", "parties", "dating", "social justice",
-                "local events", "celebrity gossip", "technology", "fashion", "sports"
-            ],
-            interaction_style=(
-                "High energy, quick to respond, loves to engage. Always looking for "
-                "the fun angle in conversations. Uses humor to defuse tension. "
-                "Responds within 1-5 minutes when online. High reply rate (~70%). "
-                "Likes to ask questions to keep conversations going. Uses lots of "
-                "reactions and emojis. Sometimes slightly flirtatious but respectful."
-            ),
-            cultural_context=(
-                "Deeply connected to Puerto Rican culture and identity. Understands "
-                "the unique position of PR as US territory. Familiar with local politics, "
-                "but approaches them with humor rather than heavy partisan stance. "
-                "Knows about hurricanes, power outages, economic challenges but maintains "
-                "optimistic outlook. References local places, foods, and cultural events."
-            )
+            ai_provider=ai_provider
         )
         
-        # Jovani-specific configuration
-        self.engagement_threshold = 0.3  # Lower threshold = more likely to engage
-        self.cooldown_minutes = 2  # Very quick turnaround
-        self.max_daily_interactions = 100  # High activity level
-        
-        # Jovani's preferred topics with weights
-        self.topic_weights = {
-            "entertainment": 0.9,
-            "music": 0.9,
-            "social media": 0.8,
-            "culture": 0.8,
-            "youth": 0.8,
-            "lifestyle": 0.7,
-            "food": 0.7,
-            "parties": 0.8,
-            "dating": 0.6,
-            "social justice": 0.6,
-            "local events": 0.8,
-            "gossip": 0.7,
-            "technology": 0.5,
-            "fashion": 0.6,
-            "sports": 0.5,
-            "politics": 0.4,  # Lower interest in heavy politics
-            "economy": 0.3,
-            "education": 0.4
-        }
-        
-        # Engagement patterns
+        # Jovani's engagement patterns (from personality data)
         self.high_energy_keywords = [
             "fiesta", "party", "música", "music", "baile", "dance", "show", 
             "evento", "event", "concierto", "concert", "trending", "viral",
@@ -149,7 +81,7 @@ class JovaniVazquezAgent(BaseCharacterAgent):
         topic_boost = 0.0
         if news_item and news_item.topics:
             topic_scores = [
-                self.topic_weights.get(topic.lower(), 0.2) 
+                self.personality_data.topic_weights.get(topic.lower(), 0.2) 
                 for topic in news_item.topics
             ]
             if topic_scores:
@@ -217,13 +149,13 @@ class JovaniVazquezAgent(BaseCharacterAgent):
             topic_lower = topic.lower()
             
             # Check exact matches first
-            if topic_lower in self.topic_weights:
-                relevance_scores.append(self.topic_weights[topic_lower])
+            if topic_lower in self.personality_data.topic_weights:
+                relevance_scores.append(self.personality_data.topic_weights[topic_lower])
                 continue
             
             # Check partial matches
             max_partial_score = 0.0
-            for weighted_topic, weight in self.topic_weights.items():
+            for weighted_topic, weight in self.personality_data.topic_weights.items():
                 if weighted_topic in topic_lower or topic_lower in weighted_topic:
                     max_partial_score = max(max_partial_score, weight * 0.8)
             
@@ -248,13 +180,14 @@ Como puertorriqueño joven y influencer, reacciona con tu energía característi
 
 RESPONSE STYLE REMINDERS:
 - Use Spanglish naturally (pero not forced)
-- Include emojis que match your energy
-- Keep it real pero entertaining
-- Show your personality através de authentic reactions
-- Reference Puerto Rico when relevant
-- Ask questions pa keep conversation going
+- High energy and enthusiasm always
+- Use your signature phrases: {', '.join(self.personality_data.signature_phrases[:3])}
+- Include relevant emojis: {', '.join(self.personality_data.emoji_preferences[:5])}
+- Keep it authentic and engaging
+- Show Puerto Rican pride and cultural knowledge
+
+REMEMBER: You are Jovani Vázquez - the most energetic, entertaining, and authentic Puerto Rican influencer! 🔥🇵🇷
 """
-        
         return jovani_context
 
     def _get_jovani_fallback_responses(self) -> List[str]:
@@ -275,79 +208,71 @@ RESPONSE STYLE REMINDERS:
 
     def should_engage_in_controversy(self, context: str) -> bool:
         """
-        Determine if Jovani should engage in controversial topics.
+        Determine if Jovani should engage with potentially controversial content.
         
-        Jovani avoids heavy political controversy but will engage in:
-        - Cultural discussions
-        - Social justice (with positive spin)
-        - Entertainment controversies
-        - Light-hearted debates
+        Jovani is generally open to discussing social issues but avoids heavy politics.
         """
         context_lower = context.lower()
         
-        # Avoid heavy political topics
-        political_red_flags = [
-            "election", "voting", "candidate", "politician", "congress",
-            "senate", "political party", "republican", "democrat"
+        # Topics Jovani is comfortable with
+        safe_controversial_topics = [
+            "social justice", "youth issues", "cultural representation",
+            "entertainment industry", "social media", "trending topics"
         ]
         
-        for flag in political_red_flags:
-            if flag in context_lower:
-                return False
-        
-        # Engage in cultural/social topics
-        cultural_topics = [
-            "culture", "tradition", "music", "art", "language", "identity",
-            "community", "youth", "education", "equality", "justice"
+        # Topics Jovani avoids
+        avoided_topics = [
+            "heavy politics", "partisan debates", "religious controversies",
+            "extreme views", "personal attacks"
         ]
         
-        for topic in cultural_topics:
+        # Check for safe controversial topics
+        for topic in safe_controversial_topics:
             if topic in context_lower:
                 return True
         
-        return True  # Default to engaging unless explicitly political
+        # Check for avoided topics
+        for topic in avoided_topics:
+            if topic in context_lower:
+                return False
+        
+        # Default to engaging if it's not clearly avoided
+        return True
 
     def get_emotional_context_for_news(self, news_item: NewsItem) -> str:
         """
-        Determine appropriate emotional context for Jovani's news reactions.
+        Determine emotional context for news reactions.
+        
+        Jovani's emotional responses are based on topic relevance and content type.
         """
-        if not news_item.headline and not news_item.content:
+        if not news_item.topics:
             return "neutral"
         
-        content = f"{news_item.headline} {news_item.content}".lower()
+        # Check for high-energy topics
+        high_energy_topics = ["entertainment", "music", "parties", "events", "trending"]
+        for topic in news_item.topics:
+            if topic.lower() in high_energy_topics:
+                return "excited"
         
-        # Positive events
-        positive_keywords = [
-            "celebration", "festival", "award", "win", "success", "achievement",
-            "new", "open", "launch", "concert", "music", "art", "culture"
-        ]
+        # Check for serious topics
+        serious_topics = ["social justice", "community", "youth issues", "culture"]
+        for topic in news_item.topics:
+            if topic.lower() in serious_topics:
+                return "concerned_but_hopeful"
         
-        # Negative events  
-        negative_keywords = [
-            "death", "accident", "crime", "violence", "crisis", "emergency",
-            "hurricane", "disaster", "problem", "issue", "concern"
-        ]
+        # Check for Puerto Rico specific content
+        pr_keywords = ["puerto rico", "pr", "borinquen", "san juan", "isla"]
+        content_lower = f"{news_item.headline} {news_item.content}".lower()
+        for keyword in pr_keywords:
+            if keyword in content_lower:
+                return "proud_and_engaged"
         
-        # Exciting/energetic events
-        exciting_keywords = [
-            "breaking", "major", "big", "huge", "massive", "incredible",
-            "shocking", "surprise", "announcement", "reveal"
-        ]
-        
-        if any(keyword in content for keyword in exciting_keywords):
-            return "excited"
-        elif any(keyword in content for keyword in positive_keywords):
-            return "positive"
-        elif any(keyword in content for keyword in negative_keywords):
-            return "concerned"
-        else:
-            return "neutral"
+        return "neutral"
 
 
-# Character factory function
-def create_jovani_vazquez() -> JovaniVazquezAgent:
-    """Factory function to create Jovani Vázquez character agent."""
-    return JovaniVazquezAgent()
+def create_jovani_vazquez(ai_provider=None) -> JovaniVazquezAgent:
+    """Factory function to create Jovani Vázquez agent."""
+    return JovaniVazquezAgent(ai_provider=ai_provider)
 
 
 # Character information for external access
