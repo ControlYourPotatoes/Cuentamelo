@@ -5,8 +5,9 @@ This is the "adapter" that connects our port to the external Claude service.
 from typing import List, Dict, Any, Optional
 import logging
 
-from app.ports.ai_provider import AIProviderPort, PersonalityConfig, AIResponse
+from app.ports.ai_provider import AIProviderPort, AIResponse
 from app.models.conversation import ConversationMessage
+from app.models.personality import PersonalityData
 from app.tools.claude_client import ClaudeClient, PersonalityPrompt
 
 logger = logging.getLogger(__name__)
@@ -33,15 +34,22 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def generate_character_response(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         context: str,
         conversation_history: Optional[List[ConversationMessage]] = None,
-        target_topic: Optional[str] = None
+        target_topic: Optional[str] = None,
+        thread_context: Optional[str] = None,
+        is_new_thread: bool = True
     ) -> AIResponse:
-        """Generate character response using Claude API."""
+        """Generate character response using Claude API with thread awareness."""
         try:
             # Convert our domain model to Claude's format
-            claude_prompt = self._convert_to_claude_prompt(personality_config)
+            claude_prompt = self._convert_to_claude_prompt(personality_data)
+            
+            # Enhance context with thread awareness
+            enhanced_context = self._enhance_context_with_thread_awareness(
+                context, thread_context, is_new_thread, personality_data
+            )
             
             # Convert conversation history to Claude format
             claude_history = []
@@ -58,7 +66,7 @@ class ClaudeAIAdapter(AIProviderPort):
             # Call Claude API
             claude_response = await self.claude_client.generate_character_response(
                 character_prompt=claude_prompt,
-                context=context,
+                context=enhanced_context,
                 conversation_history=claude_history,
                 target_topic=target_topic
             )
@@ -72,7 +80,9 @@ class ClaudeAIAdapter(AIProviderPort):
                     "estimated_tokens": claude_response.estimated_tokens,
                     "response_time_ms": claude_response.response_time_ms,
                     "provider": "claude",
-                    "model": self.claude_client.model
+                    "model": self.claude_client.model,
+                    "thread_aware": not is_new_thread,
+                    "personality_used": personality_data.character_id
                 }
             )
             
@@ -80,7 +90,7 @@ class ClaudeAIAdapter(AIProviderPort):
             logger.error(f"Error in Claude adapter: {str(e)}")
             # Return fallback response
             return AIResponse(
-                content=f"[Error generating response for {personality_config.character_name}]",
+                content=f"[Error generating response for {personality_data.character_name}]",
                 confidence_score=0.0,
                 character_consistency=False,
                 metadata={"error": str(e), "provider": "claude"}
@@ -88,14 +98,14 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def generate_news_reaction(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         news_headline: str,
         news_content: str,
         emotional_context: str = "neutral"
     ) -> AIResponse:
         """Generate news reaction using Claude API."""
         try:
-            claude_prompt = self._convert_to_claude_prompt(personality_config)
+            claude_prompt = self._convert_to_claude_prompt(personality_data)
             
             claude_response = await self.claude_client.generate_news_reaction(
                 character_prompt=claude_prompt,
@@ -112,7 +122,8 @@ class ClaudeAIAdapter(AIProviderPort):
                     "estimated_tokens": claude_response.estimated_tokens,
                     "response_time_ms": claude_response.response_time_ms,
                     "provider": "claude",
-                    "emotional_context": emotional_context
+                    "emotional_context": emotional_context,
+                    "personality_used": personality_data.character_id
                 }
             )
             
@@ -127,12 +138,12 @@ class ClaudeAIAdapter(AIProviderPort):
     
     async def validate_personality_consistency(
         self,
-        personality_config: PersonalityConfig,
+        personality_data: PersonalityData,
         generated_content: str
     ) -> bool:
         """Validate personality consistency using Claude."""
         try:
-            claude_prompt = self._convert_to_claude_prompt(personality_config)
+            claude_prompt = self._convert_to_claude_prompt(personality_data)
             return await self.claude_client._validate_personality_consistency(
                 claude_prompt, generated_content
             )
@@ -144,18 +155,20 @@ class ClaudeAIAdapter(AIProviderPort):
         """Check if Claude API is available."""
         try:
             # Simple test call to verify API connectivity
-            test_prompt = PersonalityPrompt(
+            from app.models.personality import LanguageStyle
+            test_personality = PersonalityData(
+                character_id="test",
                 character_name="Test",
+                character_type="test",
                 personality_traits="Test personality",
                 background="Test background",
-                language_style="English",
-                topics_of_interest=["test"],
+                language_style=LanguageStyle.ENGLISH,
                 interaction_style="casual",
                 cultural_context="test context"
             )
             
-            response = await self.claude_client.generate_character_response(
-                character_prompt=test_prompt,
+            response = await self.generate_character_response(
+                personality_data=test_personality,
                 context="Health check test",
                 target_topic="test"
             )
@@ -166,14 +179,97 @@ class ClaudeAIAdapter(AIProviderPort):
             logger.error(f"Claude health check failed: {str(e)}")
             return False
     
-    def _convert_to_claude_prompt(self, config: PersonalityConfig) -> PersonalityPrompt:
+    def _convert_to_claude_prompt(self, personality_data: PersonalityData) -> PersonalityPrompt:
         """Convert our domain model to Claude's format."""
         return PersonalityPrompt(
-            character_name=config.character_name,
-            personality_traits=config.personality_traits,
-            background=config.background,
-            language_style=config.language_style,
-            topics_of_interest=config.topics_of_interest,
-            interaction_style=config.interaction_style,
-            cultural_context=config.cultural_context
-        ) 
+            character_name=personality_data.character_name,
+            personality_traits=personality_data.personality_traits,
+            background=personality_data.background,
+            language_style=personality_data.language_style.value if hasattr(personality_data.language_style, 'value') else str(personality_data.language_style),
+            topics_of_interest=personality_data.topics_of_interest,
+            interaction_style=personality_data.interaction_style,
+            cultural_context=personality_data.cultural_context
+        )
+    
+    def _enhance_context_with_thread_awareness(
+        self,
+        context: str,
+        thread_context: Optional[str],
+        is_new_thread: bool,
+        personality_data: PersonalityData
+    ) -> str:
+        """Enhance context with thread awareness and personality-specific instructions."""
+        
+        enhanced_context = context
+        
+        # Add thread context if this is a reply
+        if thread_context and not is_new_thread:
+            enhanced_context = f"Thread context: {thread_context}\n\nOriginal content: {context}"
+        
+        # Add personality-specific response template
+        if is_new_thread:
+            template = personality_data.response_templates.get("new_thread", "")
+        else:
+            template = personality_data.response_templates.get("thread_reply", "")
+        
+        if template:
+            enhanced_context += f"\n\n{template}"
+        
+        # Add character-specific personality prompt
+        personality_prompt = self._generate_character_specific_prompt(personality_data)
+        enhanced_context += f"\n\n{personality_prompt}"
+        
+        return enhanced_context
+    
+    def _generate_character_specific_prompt(self, personality_data: PersonalityData) -> str:
+        """Generate character-specific personality prompt with detailed instructions."""
+        
+        prompt = f"""DETAILED {personality_data.character_name.upper()} PERSONALITY:
+
+YOU ARE {personality_data.character_name.upper()} - {personality_data.personality_traits}
+
+SPEAKING STYLE - YOU MUST USE THESE EXPRESSIONS:
+"""
+        
+        # Add signature phrases
+        for phrase in personality_data.signature_phrases:
+            prompt += f'- "{phrase}"\n'
+        
+        # Add common expressions
+        if personality_data.common_expressions:
+            prompt += f"\nCOMMON EXPRESSIONS: {', '.join(personality_data.common_expressions)}\n"
+        
+        # Add emoji preferences
+        if personality_data.emoji_preferences:
+            prompt += f"\nEMOJI PREFERENCES: {', '.join(personality_data.emoji_preferences)}\n"
+        
+        # Add example responses
+        if personality_data.example_responses:
+            prompt += "\nTYPICAL RESPONSES YOU WOULD GIVE:\n"
+            for category, responses in personality_data.example_responses.items():
+                prompt += f"\nFor {category.replace('_', ' ').title()}:\n"
+                for response in responses[:2]:  # Show first 2 examples
+                    prompt += f'"{response}"\n'
+        
+        # Add energy level guidance
+        energy_desc = "HIGH ENERGY" if personality_data.base_energy_level > 0.7 else "MODERATE ENERGY" if personality_data.base_energy_level > 0.4 else "CALM ENERGY"
+        prompt += f"\nENERGY LEVEL:\n- You are {energy_desc}\n"
+        
+        if personality_data.base_energy_level > 0.7:
+            prompt += "- You use lots of exclamation marks!!!\n"
+            prompt += "- You speak quickly and energetically\n"
+            prompt += "- You're always looking for the fun angle\n"
+        
+        # Add cultural context
+        if personality_data.puerto_rico_references:
+            prompt += f"\nPUERTO RICAN REFERENCES: {', '.join(personality_data.puerto_rico_references)}\n"
+        
+        # Add validation rules
+        if personality_data.personality_consistency_rules:
+            prompt += "\nREMEMBER:\n"
+            for rule in personality_data.personality_consistency_rules:
+                prompt += f"- {rule}\n"
+        
+        prompt += f"\nREMEMBER: You are {personality_data.character_name} - {personality_data.personality_traits}"
+        
+        return prompt 
