@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    container_name: cuentamelo_db
+    environment:
+      POSTGRES_DB: cuentamelo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cuentamelo_network
+
+  # Redis Cache & State Management
+  redis:
+    image: redis:7-alpine
+    container_name: cuentamelo_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass cuentamelo_redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "cuentamelo_redis", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cuentamelo_network
+
+  # FastAPI Application (for development)
+  app:
+    build: .
+    container_name: cuentamelo_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/cuentamelo
+      - REDIS_URL=redis://:cuentamelo_redis@redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/venv # Exclude venv from volume mount
+    working_dir: /app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    networks:
+      - cuentamelo_network
+
+  # Streamlit Dashboard (Optional)
+  dashboard:
+    build: .
+    container_name: cuentamelo_dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/cuentamelo
+      - REDIS_URL=redis://:cuentamelo_redis@redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/venv # Exclude venv from volume mount
+    working_dir: /app
+    command: streamlit run dashboard/main.py --server.port=8501 --server.address=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - cuentamelo_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  cuentamelo_network:
+    driver: bridge
