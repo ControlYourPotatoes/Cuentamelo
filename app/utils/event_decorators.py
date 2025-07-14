@@ -2,9 +2,9 @@ import asyncio
 import functools
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Callable, List
-from app.services.n8n_integration import N8NWebhookService
+from app.services.n8n_integration import N8NWebhookService, n8n_service
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def emit_n8n_event(event_type: str, data_extractor: Optional[Callable] = None):
     def decorator(func):
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             try:
                 # Execute original function
@@ -33,7 +33,7 @@ def emit_n8n_event(event_type: str, data_extractor: Optional[Callable] = None):
 
                 # Emit to N8N (non-blocking)
                 asyncio.create_task(
-                    N8NWebhookService.emit_event(event_type, event_data)
+                    n8n_service.emit_event(event_type, event_data)
                 )
 
                 return result
@@ -46,7 +46,7 @@ def emit_n8n_event(event_type: str, data_extractor: Optional[Callable] = None):
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             try:
                 # For sync functions, just add to event queue
@@ -58,7 +58,7 @@ def emit_n8n_event(event_type: str, data_extractor: Optional[Callable] = None):
                     event_data = _default_data_extractor(func.__name__, args, kwargs, result, start_time)
 
                 # Queue event for async processing
-                N8NWebhookService.queue_event(event_type, event_data)
+                n8n_service.queue_event(event_type, event_data)
 
                 return result
                 
@@ -75,7 +75,7 @@ def emit_n8n_event(event_type: str, data_extractor: Optional[Callable] = None):
 
 def _default_data_extractor(func_name: str, args: tuple, kwargs: dict, result: Any, start_time: datetime) -> Dict:
     """Default data extraction for events"""
-    processing_time = (datetime.utcnow() - start_time).total_seconds()
+    processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
     
     return {
         "function": func_name,
@@ -101,13 +101,13 @@ def extract_character_data(character_field: str = "self"):
             character = args[0]
         
         if not character:
-            return _default_data_extractor("unknown", args, kwargs, result, datetime.utcnow())
+            return _default_data_extractor("unknown", args, kwargs, result, datetime.now(timezone.utc))
         
         return {
             "character_id": getattr(character, 'character_id', 'unknown'),
             "character_name": getattr(character, 'name', 'unknown'),
             "function": "character_operation",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "result_type": type(result).__name__,
             "success": True
         }
@@ -131,7 +131,7 @@ def extract_news_data():
                     break
         
         if not news_data:
-            return _default_data_extractor("news_operation", args, kwargs, result, datetime.utcnow())
+            return _default_data_extractor("news_operation", args, kwargs, result, datetime.now(timezone.utc))
         
         return {
             "title": news_data.get('title', 'Unknown'),
@@ -140,7 +140,7 @@ def extract_news_data():
             "urgency_score": news_data.get('urgency_score', 0.0),
             "cultural_relevance": news_data.get('cultural_relevance', 0.0),
             "content_preview": news_data.get('content', '')[:100] + "..." if len(news_data.get('content', '')) > 100 else news_data.get('content', ''),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     return extractor
@@ -163,7 +163,7 @@ def extract_twitter_data():
                 "hashtag_count": content.count("#"),
                 "mention_count": content.count("@")
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     return extractor

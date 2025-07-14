@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from queue import Queue
 import aiohttp
@@ -46,7 +46,7 @@ class N8NWebhookService:
 
             payload = {
                 "event_type": event_type,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
                 "source": "cuentamelo_langgraph",
                 "demo_session_id": settings.DEMO_SESSION_ID
@@ -59,7 +59,7 @@ class N8NWebhookService:
             ) as response:
                 if response.status == 200:
                     self.event_count += 1
-                    self.last_event_time = datetime.utcnow()
+                    self.last_event_time = datetime.now(timezone.utc)
                     logger.info(f"N8N event sent: {event_type} (total: {self.event_count})")
                     return True
                 else:
@@ -76,7 +76,7 @@ class N8NWebhookService:
             self.event_queue.put({
                 "event_type": event_type,
                 "data": data,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
     async def process_queued_events(self):
@@ -98,14 +98,14 @@ class N8NWebhookService:
             
             test_payload = {
                 "event_type": "connection_test",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": {"test": True},
                 "source": "cuentamelo_langgraph",
                 "demo_session_id": settings.DEMO_SESSION_ID
             }
             
             async with self.session.post(
-                f"{self.n8n_webhook_url}/webhook/cuentamelo-test",
+                f"{self.n8n_webhook_url}/webhook/cuentamelo-event",
                 json=test_payload,
                 headers={"Content-Type": "application/json"}
             ) as response:

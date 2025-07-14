@@ -13,6 +13,7 @@ import hashlib
 from app.tools.twitter_connector import TwitterConnector
 from app.models.conversation import NewsItem
 from app.services.redis_client import RedisClient
+from app.utils.event_decorators import emit_news_discovered
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ class NewsDiscoveryService:
             "#Yauco": 0.7,
         }
     
+    @emit_news_discovered()
     async def discover_latest_news(self, max_results: int = 10) -> List[NewsItem]:
         """
         Discover latest news from monitored Twitter accounts.

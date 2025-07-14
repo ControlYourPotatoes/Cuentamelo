@@ -17,6 +17,7 @@ from app.ports.twitter_provider import (
     TwitterRateLimit, TwitterPostType, TwitterPostStatus
 )
 from app.config import get_settings
+from app.utils.event_decorators import emit_post_published
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -75,6 +76,7 @@ class TwitterConnector(TwitterProviderPort):
         
         logger.info("Twitter connector initialized")
     
+    @emit_post_published()
     async def post_tweet(
         self,
         content: str,
