@@ -16,6 +16,10 @@ from app.models.personality import PersonalityData
 from app.models.personalities.personality_factory import get_personality_by_id
 from app.ports.personality_port import PersonalityPort
 from app.ports.ai_provider import AIProviderPort, AIResponse
+from app.utils.event_decorators import (
+    emit_character_analyzing, emit_engagement_decision, 
+    emit_response_generating, emit_post_published
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +184,7 @@ class BaseCharacterAgent:
     
     # Core agent functionality
     
+    @emit_character_analyzing()
     async def make_engagement_decision(
         self,
         state: AgentState,
@@ -230,6 +235,7 @@ class BaseCharacterAgent:
             state.error_message = str(e)
             return AgentDecision.DEFER
     
+    @emit_response_generating()
     async def generate_response(
         self,
         state: AgentState,
@@ -292,6 +298,7 @@ class BaseCharacterAgent:
                 metadata={"error": str(e), "fallback": True}
             )
     
+    @emit_engagement_decision()
     async def react_to_news(
         self,
         state: AgentState,
