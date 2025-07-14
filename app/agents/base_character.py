@@ -3,7 +3,7 @@ Base character agent class for Puerto Rican AI personalities.
 Integrates with LangGraph workflows and AI providers for authentic character responses.
 """
 from typing import Dict, List, Optional, Any, Callable
-from abc import ABC, abstractmethod
+from abc import ABC
 from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
@@ -20,12 +20,12 @@ from app.ports.ai_provider import AIProviderPort, AIResponse
 logger = logging.getLogger(__name__)
 
 
-class BaseCharacterAgent(ABC):
+class BaseCharacterAgent:
     """
-    Abstract base class for Puerto Rican AI character agents.
-    
-    This class provides the foundation for character-specific personalities
-    while integrating with LangGraph workflows and AI providers for response generation.
+    Enhanced base class for Puerto Rican AI character agents.
+
+    This class now works seamlessly with configuration-driven personalities
+    while still supporting custom logic when needed.
     """
     
     def __init__(
@@ -78,9 +78,8 @@ class BaseCharacterAgent(ABC):
         if not self.ai_provider:
             self.ai_provider = ai_provider
     
-    # Abstract methods for character-specific behavior
-    
-    @abstractmethod
+    # Enhanced abstract methods with default implementations
+
     def calculate_engagement_probability(
         self,
         context: str,
@@ -88,32 +87,96 @@ class BaseCharacterAgent(ABC):
         news_item: NewsItem = None
     ) -> float:
         """
-        Calculate the probability that this character would engage with given content.
-        
-        Returns:
-            float: Probability between 0.0 and 1.0
+        Calculate engagement probability using personality configuration.
+
+        Default implementation uses personality's engagement boost calculation
+        and applies standard conversation momentum logic.
+
+        Override this method for custom engagement algorithms.
         """
-        pass
-    
-    @abstractmethod
+        # Get base engagement boost from personality
+        boosts = self.personality_data.calculate_engagement_boost(context)
+
+        # Apply standard conversation momentum logic
+        conversation_boost = self._calculate_conversation_momentum(conversation_history)
+
+        # Apply topic relevance if news item provided
+        topic_boost = 0.0
+        if news_item and news_item.topics:
+            topic_boost = self.personality_data.get_topic_relevance(news_item.topics) * 0.3
+
+        # Calculate final probability
+        base_probability = self.engagement_threshold
+        final_probability = (
+            base_probability +
+            boosts.get("energy", 0.0) +
+            boosts.get("pr_relevance", 0.0) +
+            boosts.get("emotion", 0.0) +
+            boosts.get("trending", 0.0) +
+            conversation_boost +
+            topic_boost
+        )
+
+        # Cap at 1.0
+        final_probability = min(final_probability, 1.0)
+
+        logger.info(
+            f"{self.character_name} engagement calc: base={base_probability}, "
+            f"energy={boosts.get('energy', 0.0)}, pr={boosts.get('pr_relevance', 0.0)}, "
+            f"conversation={conversation_boost}, topic={topic_boost}, "
+            f"final={final_probability}"
+        )
+
+        return final_probability
+
     def get_topic_relevance(self, topics: List[str]) -> float:
         """
-        Calculate how relevant given topics are to this character.
-        
-        Returns:
-            float: Relevance score between 0.0 and 1.0
+        Calculate topic relevance using personality configuration.
+
+        Default implementation delegates to personality.
+        Override for custom topic relevance logic.
         """
-        pass
-    
-    @abstractmethod
+        return self.personality_data.get_topic_relevance(topics)
+
     def get_character_specific_context(self, base_context: str) -> str:
         """
-        Add character-specific context to the base prompt context.
-        
-        Returns:
-            str: Enhanced context with character-specific perspective
+        Add character-specific context using personality configuration.
+
+        Default implementation delegates to personality.
+        Override for custom context enhancement logic.
         """
-        pass
+        return self.personality_data.get_character_context(base_context)
+
+    def _calculate_conversation_momentum(self, conversation_history: Optional[List[ConversationMessage]]) -> float:
+        """
+        Calculate conversation momentum boost.
+
+        Standard logic: More recent messages = higher engagement probability.
+        Override for custom momentum calculation.
+        """
+        if not conversation_history or len(conversation_history) == 0:
+            return 0.0
+
+        # Look at last 5 messages
+        recent_messages = conversation_history[-5:]
+
+        if len(recent_messages) >= 4:
+            return 0.2  # High momentum
+        elif len(recent_messages) >= 2:
+            return 0.1  # Medium momentum
+        else:
+            return 0.05  # Low momentum
+
+    def _get_fallback_response(self, context: str) -> str:
+        """
+        Get fallback response using personality configuration.
+
+        Default implementation uses personality fallback responses.
+        Override for custom fallback logic.
+        """
+        import random
+        responses = self.personality_data.get_fallback_responses()
+        return random.choice(responses) if responses else f"[{self.character_name} response unavailable]"
     
     # Core agent functionality
     
