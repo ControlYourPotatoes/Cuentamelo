@@ -60,7 +60,7 @@ class DependencyContainer:
             if provider_type == "claude":
                 # Create Claude client with dependency injection
                 claude_client = ClaudeClient(
-                    api_key=self.settings.anthropic_api_key
+                    api_key=self.settings.ANTHROPIC_API_KEY
                 )
                 self._services["ai_provider"] = ClaudeAIAdapter(claude_client)
                 

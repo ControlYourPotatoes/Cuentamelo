@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.config import settings
-from app.api import health
+from app.api import health, news
 
 app = FastAPI(
     title="Cuentamelo",
@@ -10,6 +10,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(news.router, prefix="/news", tags=["news"])
 
 @app.get("/")
 async def root():
