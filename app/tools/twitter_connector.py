@@ -186,7 +186,7 @@ class TwitterConnector(TwitterProviderPort):
             # Build search parameters
             search_params = {
                 "query": query,
-                "max_results": min(max_results, 100),  # Twitter API limit
+                "max_results": max(5, min(max_results, 100)),  # Twitter API requires 5-100
                 "tweet_fields": ["created_at", "public_metrics", "author_id"],
                 "user_fields": ["username", "name"],
                 "expansions": ["author_id"]
@@ -258,7 +258,7 @@ class TwitterConnector(TwitterProviderPort):
             # Get user tweets
             params = {
                 "id": user_id,
-                "max_results": min(max_results, 100),
+                "max_results": max(5, min(max_results, 100)),  # Twitter API requires 5-100
                 "tweet_fields": ["created_at", "public_metrics"],
                 "exclude": ["retweets", "replies"]
             }
