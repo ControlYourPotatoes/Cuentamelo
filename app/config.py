@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import uuid
 
 class Settings(BaseSettings):
     app_name: str = "Cuentamelo"
@@ -23,6 +24,13 @@ class Settings(BaseSettings):
     posting_rate_limit: int = 10
     interaction_cooldown: int = 900
     max_conversation_turns: int = 6
+
+    # N8N Integration Settings
+    N8N_WEBHOOK_URL: str = "http://localhost:5678"
+    DEMO_MODE_ENABLED: bool = False
+    DEMO_SESSION_ID: str = str(uuid.uuid4())
+    N8N_WEBHOOK_TIMEOUT: int = 5
+    DEMO_SPEED_MULTIPLIER: float = 1.0
 
     class Config:
         env_file = ".env"
