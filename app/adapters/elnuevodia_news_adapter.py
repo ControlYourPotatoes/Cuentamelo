@@ -242,6 +242,14 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
     async def get_trending_topics(self, max_topics: int = 10) -> List[TrendingTopic]:
         """Get trending topics from El Nuevo Día tweets."""
         try:
+            # Try to get cached trending topics first
+            cached_topics = await self._get_cached_trending_topics(max_topics)
+            
+            if cached_topics:
+                logger.info("Using cached trending topics")
+                # Convert back to TrendingTopic objects
+                return [TrendingTopic(**topic) for topic in cached_topics]
+            
             # Get recent tweets to analyze trending topics
             tweets = await self.twitter_connector.get_user_tweets(
                 username="ElNuevoDia",
@@ -279,6 +287,9 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
                         relevance=relevance,
                         category=category
                     ))
+            
+            # Cache the trending topics for future use
+            await self._cache_trending_topics(max_topics, trending_topics[:max_topics])
             
             return trending_topics[:max_topics]
             
