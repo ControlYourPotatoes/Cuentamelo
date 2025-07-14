@@ -365,7 +365,6 @@ async def post_to_twitter(state: CharacterWorkflowState) -> CharacterWorkflowSta
                     state["tweet_posted"] = False
                     state["twitter_error"] = post_result.error_message
             else:
-                logger.warning(f"No Twitter provider available for {character_agent.character_name}")
                 state["tweet_posted"] = False
                 state["twitter_error"] = "No Twitter provider configured"
         else:

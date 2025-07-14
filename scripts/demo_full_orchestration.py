@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from app.services.dependency_container import DependencyContainer
 from app.agents.agent_factory import create_agent
 from app.graphs.character_workflow import execute_character_workflow
-from app.ports.twitter_provider import TwitterPostResult, TwitterPostStatus
+from app.ports.twitter_provider import TwitterPostResult, TwitterPostStatus, TwitterPost
 
 
 class DemoOrchestrator:
@@ -64,6 +64,10 @@ class DemoOrchestrator:
         print("📰 STEP 1: Discovering Latest News")
         print("-" * 40)
         
+        if not self.news_provider:
+            print("❌ News provider not initialized!")
+            return []
+        
         news_items = await self.news_provider.discover_latest_news(max_results=3)
         
         if not news_items:
@@ -88,6 +92,10 @@ class DemoOrchestrator:
         print(f"📝 Content: {news_item.content[:100]}...")
         print()
         
+        if not self.jovani:
+            print("❌ Jovani agent not initialized!")
+            return {"success": False, "error": "Agent not initialized"}
+        
         # Execute character workflow
         result = await execute_character_workflow(
             character_agent=self.jovani,
@@ -98,23 +106,33 @@ class DemoOrchestrator:
             thread_engagement_state=None
         )
         
-        if result["success"]:
-            print(f"✅ Decision: {result.get('engagement_decision', 'unknown')}")
-            agent_state = result.get('agent_state')
+        # Convert result to dict for type safety
+        result_dict = {
+            "success": result["success"],
+            "engagement_decision": result.get("engagement_decision"),
+            "generated_response": result.get("generated_response"),
+            "execution_time_ms": result.get("execution_time_ms", 0),
+            "error": result.get("error"),
+            "agent_state": result.get("agent_state")
+        }
+        
+        if result_dict["success"]:
+            print(f"✅ Decision: {result_dict.get('engagement_decision', 'unknown')}")
+            agent_state = result_dict.get('agent_state')
             if agent_state:
                 print(f"🎯 Confidence: {agent_state.decision_confidence:.2f}")
-            print(f"⏱️  Processing Time: {result.get('execution_time_ms', 0)}ms")
+            print(f"⏱️  Processing Time: {result_dict.get('execution_time_ms', 0)}ms")
             
-            if result.get("generated_response"):
+            if result_dict.get("generated_response"):
                 print(f"💬 Jovani's Response:")
-                print(f"   \"{result['generated_response']}\"")
-                return result
+                print(f"   \"{result_dict['generated_response']}\"")
+                return result_dict
             else:
                 print("🤐 Jovani chose not to respond")
-                return result
+                return result_dict
         else:
-            print(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
-            return result
+            print(f"❌ Workflow failed: {result_dict.get('error', 'Unknown error')}")
+            return result_dict
     
     async def post_to_twitter(self, response: str, news_item: Any) -> TwitterPostResult:
         """Post Jovani's response to Twitter (simulated for demo)."""
@@ -128,6 +146,19 @@ class DemoOrchestrator:
         print()
         
         # Post to Twitter (real posting)
+        if not self.twitter_provider:
+            print("❌ Twitter provider not initialized!")
+            return TwitterPostResult(
+                success=False,
+                post=TwitterPost(
+                    content=tweet_content,
+                    character_id="jovani_vazquez",
+                    character_name="Jovani Vázquez",
+                    status=TwitterPostStatus.FAILED
+                ),
+                error_message="Twitter provider not initialized"
+            )
+        
         result = await self.twitter_provider.post_tweet(
             content=tweet_content,
             character_id="jovani_vazquez",
@@ -267,6 +298,10 @@ async def run_interactive_demo():
         topics_list = [t.strip() for t in topics.split(",")] if topics else []
         
         # Create custom news item
+        if not orchestrator.news_provider:
+            print("❌ News provider not initialized!")
+            continue
+        
         news_item = await orchestrator.news_provider.ingest_news_item(
             headline=headline,
             content=content,
@@ -296,13 +331,8 @@ async def main():
     """Main entry point."""
     if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
         await run_interactive_demo()
-    elif len(sys.argv) > 1 and sys.argv[1] == "--mock-twitter":
-        # Use mock Twitter for demo (no rate limits)
-        orchestrator = DemoOrchestrator()
-        orchestrator.container.config["twitter_provider"] = "mock"
-        await orchestrator.run_full_demo()
     else:
-        # Use real Twitter (may hit rate limits)
+        # Use real Twitter posting (this is the main demo)
         orchestrator = DemoOrchestrator()
         await orchestrator.run_full_demo()
 

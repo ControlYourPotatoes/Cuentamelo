@@ -156,8 +156,10 @@ RESPONSE GUIDELINES:
 4. Keep responses concise but engaging (1-3 sentences typically)
 5. Use relevant emojis that match your personality
 6. Reference Puerto Rican culture when relevant
+7. IMPORTANT: Generate ONLY ONE response - no follow-up tweets, no thread continuations
+8. Keep your response under 280 characters for Twitter compatibility
 
-Remember: You are not just playing a role - you ARE this character. Respond naturally as they would."""
+Remember: You are not just playing a role - you ARE this character. Respond naturally as they would with a single, complete response."""
 
     def _get_character_specific_prompt(self, character_name: str) -> str:
         """Get detailed character-specific personality prompts with examples."""
@@ -350,6 +352,7 @@ You are {character_name}, a Puerto Rican AI character. Maintain your unique pers
             prompt_parts.append(f"\nFOCUS ON: {target_topic}")
         
         prompt_parts.append("\nRespond as your character would naturally react to this context.")
+        prompt_parts.append("\nIMPORTANT: Provide ONLY ONE response - no follow-up tweets or thread continuations.")
         
         return "\n".join(prompt_parts)
     

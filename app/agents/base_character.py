@@ -211,10 +211,7 @@ class BaseCharacterAgent:
         """
         try:
             # Check availability
-            print(f"🔍 DEBUG: Checking availability for {self.character_name}")
-            print(f"🔍 DEBUG: is_character_available result: {is_character_available(state)}")
             if not is_character_available(state):
-                print(f"🔍 DEBUG: {self.character_name} is not available (cooldown)")
                 logger.info(f"{self.character_name} is not available (cooldown)")
                 return AgentDecision.DEFER
             
@@ -284,13 +281,22 @@ class BaseCharacterAgent:
                 is_new_thread=is_new_thread
             )
             
+            # Clean the response to remove any follow-up tweet content
+            cleaned_content = self._clean_response_content(response.content)
+            
             # Update state with response info
-            state.generated_content = response.content
+            state.generated_content = cleaned_content
             state.personality_consistency_score = response.confidence_score
             state.response_time_ms = response.metadata.get("response_time_ms", 0)
             state.content_approved = response.character_consistency
             
-            return response
+            # Return response with cleaned content
+            return AIResponse(
+                content=cleaned_content,
+                confidence_score=response.confidence_score,
+                character_consistency=response.character_consistency,
+                metadata=response.metadata
+            )
             
         except Exception as e:
             logger.error(f"Error generating response for {self.character_name}: {str(e)}")
@@ -488,6 +494,40 @@ class BaseCharacterAgent:
             return f"{signature} [Response temporarily unavailable]"
         
         return f"[{self.character_name} response temporarily unavailable]"
+    
+    def _clean_response_content(self, content: str) -> str:
+        """Clean response content to remove follow-up tweets and unwanted formatting."""
+        if not content:
+            return content
+        
+        # Remove follow-up tweet indicators
+        follow_up_indicators = [
+            "[Follow-up tweet in thread]",
+            "[Follow-up tweet]",
+            "Follow-up tweet:",
+            "Follow-up:",
+            "Next tweet:",
+            "Thread continuation:",
+            "Part 2:",
+            "Continued:"
+        ]
+        
+        cleaned_content = content
+        for indicator in follow_up_indicators:
+            if indicator in cleaned_content:
+                # Split on the indicator and take only the first part
+                parts = cleaned_content.split(indicator)
+                cleaned_content = parts[0].strip()
+                break
+        
+        # Remove any remaining newlines and extra spaces
+        cleaned_content = " ".join(cleaned_content.split())
+        
+        # Ensure it's not too long (Twitter limit is 280 characters)
+        if len(cleaned_content) > 280:
+            cleaned_content = cleaned_content[:277] + "..."
+        
+        return cleaned_content
     
     def get_character_summary(self) -> Dict[str, Any]:
         """Get a summary of the character for external use."""
