@@ -11,6 +11,7 @@ import os
 from app.ports.ai_provider import AIProviderPort
 from app.ports.orchestration_service import OrchestrationServicePort
 from app.ports.news_provider import NewsProviderPort
+from app.ports.twitter_provider import TwitterProviderPort
 from app.adapters.claude_ai_adapter import ClaudeAIAdapter
 from app.adapters.langgraph_orchestration_adapter import LangGraphOrchestrationAdapter
 from app.adapters.twitter_news_adapter import TwitterNewsAdapter
@@ -173,6 +174,34 @@ class DependencyContainer:
         return self._services["news_provider"]
 
     @lru_cache(maxsize=1)
+    def get_twitter_provider(self) -> TwitterProviderPort:
+        """
+        Get the Twitter provider service.
+        
+        This demonstrates dependency injection - we return an interface,
+        not a concrete implementation. This makes testing and swapping easier.
+        """
+        if "twitter_provider" not in self._services:
+            
+            # Check configuration for which Twitter provider to use
+            provider_type = self.config.get("twitter_provider", "mock")
+            
+            if provider_type == "twitter":
+                # Create Twitter connector with dependency injection
+                self._services["twitter_provider"] = TwitterConnector()
+                
+            elif provider_type == "mock":
+                # For testing and demos - inject a mock provider
+                self._services["twitter_provider"] = self._create_mock_twitter_provider()
+                
+            else:
+                raise ValueError(f"Unknown Twitter provider: {provider_type}")
+            
+            logger.info(f"Created Twitter provider: {provider_type}")
+        
+        return self._services["twitter_provider"]
+
+    @lru_cache(maxsize=1)
     def get_personality_config_loader(self) -> PersonalityConfigLoader:
         """
         Get the personality configuration loader service.
@@ -215,6 +244,11 @@ class DependencyContainer:
         """Create a mock news provider for testing."""
         from app.tests.mocks.mock_news_provider import MockNewsProvider
         return MockNewsProvider()
+    
+    def _create_mock_twitter_provider(self) -> TwitterProviderPort:
+        """Create a mock Twitter provider for testing."""
+        from app.tests.mocks.mock_twitter_provider import MockTwitterProvider
+        return MockTwitterProvider()
     
     def configure_for_testing(self):
         """Configure the container for testing with mocks."""
