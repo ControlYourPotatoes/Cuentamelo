@@ -30,14 +30,15 @@ class JovaniVazquezAgent(BaseCharacterAgent):
     - Specialized controversy handling
     """
 
-    def __init__(self, ai_provider=None, personality: Optional[PersonalityPort] = None):
+    def __init__(self, ai_provider=None, personality: Optional[PersonalityPort] = None, twitter_provider=None):
         # Use provided personality or create default
         self.personality = personality or create_jovani_personality()
 
         super().__init__(
             character_id=self.personality.character_id,
             ai_provider=ai_provider,
-            personality=self.personality
+            personality=self.personality,
+            twitter_provider=twitter_provider
         )
 
     def calculate_engagement_probability(
@@ -178,9 +179,9 @@ class JovaniVazquezAgent(BaseCharacterAgent):
         )
 
 
-def create_jovani_vazquez(ai_provider=None, personality: Optional[PersonalityPort] = None) -> JovaniVazquezAgent:
+def create_jovani_vazquez(ai_provider=None, personality: Optional[PersonalityPort] = None, twitter_provider=None) -> JovaniVazquezAgent:
     """Factory function to create Jovani Vázquez agent."""
-    return JovaniVazquezAgent(ai_provider=ai_provider, personality=personality)
+    return JovaniVazquezAgent(ai_provider=ai_provider, personality=personality, twitter_provider=twitter_provider)
 
 
 # Character information for external access

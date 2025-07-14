@@ -72,6 +72,7 @@ def create_character_workflow() -> StateGraph:
     workflow.add_node("make_decision", make_engagement_decision)
     workflow.add_node("generate_response", generate_character_response)
     workflow.add_node("validate_response", validate_response_consistency)
+    workflow.add_node("post_to_twitter", post_to_twitter)
     workflow.add_node("format_output", format_final_output)
     workflow.add_node("handle_error", handle_workflow_error)
     
@@ -85,10 +86,9 @@ def create_character_workflow() -> StateGraph:
         "make_decision",
         route_after_decision,
         {
-            "engage": "generate_response",
-            "ignore": "format_output",
-            "defer": "format_output",
-            "error": "handle_error"
+            "generate_response": "generate_response",
+            "format_output": "format_output",
+            "handle_error": "handle_error"
         }
     )
     
@@ -99,11 +99,13 @@ def create_character_workflow() -> StateGraph:
         "validate_response",
         route_after_validation,
         {
-            "valid": "format_output",
+            "valid": "post_to_twitter",
             "invalid": "generate_response",  # Retry generation
             "error": "handle_error"
         }
     )
+    
+    workflow.add_edge("post_to_twitter", "format_output")
     
     workflow.add_edge("format_output", END)
     workflow.add_edge("handle_error", END)
@@ -210,6 +212,16 @@ async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWo
         is_new_thread = state.get("is_new_thread", True)
         
         agent_state.current_step = "make_decision"
+        
+        # Debug logging
+        print(f"🔍 DEBUG: Making engagement decision for {character_agent.character_name}")
+        print(f"🔍 DEBUG: Agent state workflow_complete: {agent_state.workflow_complete}")
+        print(f"🔍 DEBUG: Agent state current_step: {agent_state.current_step}")
+        print(f"🔍 DEBUG: Agent state cooldown_until: {agent_state.cooldown_until}")
+        logger.info(f"Making engagement decision for {character_agent.character_name}")
+        logger.info(f"Agent state workflow_complete: {agent_state.workflow_complete}")
+        logger.info(f"Agent state current_step: {agent_state.current_step}")
+        logger.info(f"Agent state cooldown_until: {agent_state.cooldown_until}")
         
         # Check thread engagement limits if this is a reply
         if not is_new_thread and thread_state:
@@ -331,6 +343,65 @@ async def validate_response_consistency(state: CharacterWorkflowState) -> Charac
         return state
 
 
+async def post_to_twitter(state: CharacterWorkflowState) -> CharacterWorkflowState:
+    """Post the generated response to Twitter."""
+    try:
+        character_agent = state["character_agent"]
+        agent_state = state["agent_state"]
+        generated_response = state.get("generated_response")
+        
+        # Debug logging
+        print(f"🔍 DEBUG: Post to Twitter step for {character_agent.character_name}")
+        print(f"🔍 DEBUG: Generated response: {generated_response[:50]}..." if generated_response else "🔍 DEBUG: No generated response")
+        
+        agent_state.current_step = "post_to_twitter"
+        
+        # Only post if we have a valid response
+        if generated_response:
+            twitter_provider = getattr(character_agent, 'twitter_provider', None)
+            
+            if twitter_provider:
+                post_result = await twitter_provider.post_tweet(
+                    content=generated_response,
+                    character_id=character_agent.character_id,
+                    character_name=character_agent.character_name,
+                    thread_id=state.get("thread_id")
+                )
+                if post_result.success:
+                    state["tweet_posted"] = True
+                    state["twitter_tweet_id"] = post_result.twitter_tweet_id
+                    state["twitter_tweet_url"] = f"https://twitter.com/CuentameloAgent/status/{post_result.twitter_tweet_id}"
+                    logger.info(f"Successfully posted tweet for {character_agent.character_name}: {post_result.twitter_tweet_id}")
+                else:
+                    print(f"❌ Twitter post failed: {post_result.error_message}")
+                    logger.error(f"Failed to post tweet for {character_agent.character_name}: {post_result.error_message}")
+                    state["tweet_posted"] = False
+                    state["twitter_error"] = post_result.error_message
+            else:
+                print(f"❌ No Twitter provider available for {character_agent.character_name}")
+                logger.warning(f"No Twitter provider available for {character_agent.character_name}")
+                state["tweet_posted"] = False
+                state["twitter_error"] = "No Twitter provider configured"
+        else:
+            print(f"❌ No generated response to post for {character_agent.character_name}")
+            state["tweet_posted"] = False
+            state["twitter_error"] = "No generated response to post"
+            logger.warning(f"No generated response to post for {character_agent.character_name}")
+        
+        state["agent_state"] = agent_state
+        state["workflow_step"] = "post_to_twitter"
+        
+        return state
+        
+    except Exception as e:
+        logger.error(f"Error posting to Twitter: {str(e)}")
+        state["error_details"] = str(e)
+        state["tweet_posted"] = False
+        state["twitter_error"] = str(e)
+        state["success"] = False
+        return state
+
+
 async def format_final_output(state: CharacterWorkflowState) -> CharacterWorkflowState:
     """Format the final output message."""
     try:
@@ -438,13 +509,13 @@ def route_after_decision(state: CharacterWorkflowState) -> str:
     decision = state.get("engagement_decision")
     
     if decision == AgentDecision.ENGAGE:
-        return "engage"
+        return "generate_response"
     elif decision == AgentDecision.IGNORE:
-        return "ignore"
+        return "format_output"
     elif decision == AgentDecision.DEFER:
-        return "defer"
+        return "format_output"
     else:
-        return "error"
+        return "handle_error"
 
 
 def route_after_validation(state: CharacterWorkflowState) -> str:

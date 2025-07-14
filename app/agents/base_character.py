@@ -16,6 +16,7 @@ from app.models.personality import PersonalityData
 from app.models.personalities.personality_factory import get_personality_by_id
 from app.ports.personality_port import PersonalityPort
 from app.ports.ai_provider import AIProviderPort, AIResponse
+from app.ports.twitter_provider import TwitterProviderPort
 from app.utils.event_decorators import (
     emit_character_analyzing, emit_engagement_decision, 
     emit_response_generating, emit_post_published
@@ -36,7 +37,8 @@ class BaseCharacterAgent:
         self,
         character_id: str,
         ai_provider: Optional[AIProviderPort] = None,
-        personality: Optional[PersonalityPort] = None
+        personality: Optional[PersonalityPort] = None,
+        twitter_provider: Optional['TwitterProviderPort'] = None
     ):
         self.character_id = character_id
         
@@ -51,6 +53,9 @@ class BaseCharacterAgent:
         
         # Inject AI provider dependency
         self.ai_provider = ai_provider
+        
+        # Inject Twitter provider dependency
+        self.twitter_provider = twitter_provider
         
         # Get agent personality data for configuration
         agent_data = self.personality_data.get_agent_personality_data()
@@ -206,7 +211,10 @@ class BaseCharacterAgent:
         """
         try:
             # Check availability
+            print(f"🔍 DEBUG: Checking availability for {self.character_name}")
+            print(f"🔍 DEBUG: is_character_available result: {is_character_available(state)}")
             if not is_character_available(state):
+                print(f"🔍 DEBUG: {self.character_name} is not available (cooldown)")
                 logger.info(f"{self.character_name} is not available (cooldown)")
                 return AgentDecision.DEFER
             
