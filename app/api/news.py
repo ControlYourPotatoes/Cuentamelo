@@ -10,10 +10,8 @@ from datetime import datetime, timezone
 from app.models.conversation import NewsItem
 from app.agents.agent_factory import create_agent
 from app.graphs.character_workflow import execute_character_workflow
-from app.services.dependency_container import get_container, configure_container_for_production
-from app.tools.news_discovery import NewsDiscoveryService
-from app.tools.twitter_connector import TwitterConnector
-from app.services.redis_client import RedisClient
+from app.services.dependency_container import get_container
+from app.ports.news_provider import TrendingTopic, NewsProviderInfo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -198,23 +196,28 @@ async def process_news(
 
 
 @router.get("/discover")
-async def discover_twitter_news():
+async def discover_news(
+    max_results: int = 10,
+    categories: Optional[List[str]] = None,
+    min_relevance_score: float = 0.3
+):
     """
-    Discover latest news from Twitter accounts.
+    Discover latest news from the configured news provider.
     
-    This endpoint fetches news from monitored Puerto Rican Twitter accounts
+    This endpoint fetches news from the configured news source
     and returns the most relevant items for character engagement.
     """
     try:
-        # Initialize news discovery service
+        # Get news provider from dependency container
         container = get_container()
-        twitter_connector = TwitterConnector()
-        redis_client = RedisClient()
-        
-        news_service = NewsDiscoveryService(twitter_connector, redis_client)
+        news_provider = container.get_news_provider()
         
         # Discover latest news
-        news_items = await news_service.discover_latest_news(max_results=10)
+        news_items = await news_provider.discover_latest_news(
+            max_results=max_results,
+            categories=categories,
+            min_relevance_score=min_relevance_score
+        )
         
         return {
             "news_items": [
@@ -234,50 +237,62 @@ async def discover_twitter_news():
         }
         
     except Exception as e:
-        logger.error(f"Error discovering Twitter news: {str(e)}")
+        logger.error(f"Error discovering news: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error discovering news: {str(e)}")
 
 
 @router.get("/trending")
-async def get_trending_news():
+async def get_trending_news(max_topics: int = 10):
     """
     Get trending news topics that characters might be interested in.
     
-    This endpoint could integrate with news APIs to provide
-    trending topics for character engagement.
+    This endpoint fetches trending topics from the configured news provider
+    for character engagement.
     """
-    # Mock trending topics for now
-    trending_topics = [
-        {
-            "topic": "Puerto Rico Tourism",
-            "relevance_score": 0.9,
-            "trending_score": 85,
-            "category": "economy"
-        },
-        {
-            "topic": "Bad Bunny Music",
-            "relevance_score": 0.95,
-            "trending_score": 92,
-            "category": "entertainment"
-        },
-        {
-            "topic": "Puerto Rican Food Culture",
-            "relevance_score": 0.8,
-            "trending_score": 78,
-            "category": "culture"
+    try:
+        # Get news provider from dependency container
+        container = get_container()
+        news_provider = container.get_news_provider()
+        
+        # Get trending topics
+        trending_topics = await news_provider.get_trending_topics(max_topics=max_topics)
+        
+        return {
+            "trending_topics": [
+                {
+                    "term": topic.term,
+                    "count": topic.count,
+                    "relevance": topic.relevance,
+                    "category": topic.category,
+                    "metadata": topic.metadata
+                }
+                for topic in trending_topics
+            ],
+            "total_topics": len(trending_topics),
+            "last_updated": datetime.now(timezone.utc).isoformat()
         }
-    ]
-    
-    return {
-        "trending_topics": trending_topics,
-        "last_updated": datetime.now(timezone.utc).isoformat()
-    }
+        
+    except Exception as e:
+        logger.error(f"Error getting trending topics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting trending topics: {str(e)}")
 
 
 @router.get("/health")
 async def news_health_check():
     """Health check for news processing system."""
     try:
+        # Get news provider from dependency container
+        container = get_container()
+        news_provider = container.get_news_provider()
+        
+        # Test news provider health
+        news_healthy = await news_provider.health_check()
+        if not news_healthy:
+            raise Exception("News provider health check failed")
+        
+        # Get provider info
+        provider_info = await news_provider.get_provider_info()
+        
         # Test character creation
         agent = create_agent("jovani_vazquez")
         if not agent:
@@ -286,6 +301,11 @@ async def news_health_check():
         return {
             "status": "healthy",
             "message": "News processing system is operational",
+            "news_provider": {
+                "name": provider_info.name,
+                "type": provider_info.type,
+                "capabilities": provider_info.capabilities
+            },
             "available_characters": ["jovani_vazquez"],
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
