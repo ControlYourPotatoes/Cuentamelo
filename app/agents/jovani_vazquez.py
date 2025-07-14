@@ -150,6 +150,33 @@ class JovaniVazquezAgent(BaseCharacterAgent):
         else:
             return 0.05  # Minimal momentum
 
+    def get_ai_personality_data(self) -> 'AIPersonalityData':
+        """Get the minimal AI personality data for AI providers."""
+        # Create AIPersonalityData from the underlying PersonalityData
+        from app.models.ai_personality_data import AIPersonalityData
+        
+        personality_data = self.personality.get_personality_data()
+        
+        return AIPersonalityData(
+            character_id=personality_data.character_id,
+            character_name=personality_data.character_name,
+            character_type=personality_data.character_type,
+            personality_traits=personality_data.personality_traits,
+            background=personality_data.background,
+            language_style=personality_data.language_style,
+            interaction_style=personality_data.interaction_style,
+            cultural_context=personality_data.cultural_context,
+            signature_phrases=personality_data.signature_phrases,
+            common_expressions=personality_data.common_expressions,
+            emoji_preferences=personality_data.emoji_preferences,
+            topics_of_interest=personality_data.topics_of_interest,
+            example_responses=personality_data.example_responses,
+            response_templates=personality_data.response_templates,
+            base_energy_level=personality_data.base_energy_level,
+            puerto_rico_references=personality_data.puerto_rico_references,
+            personality_consistency_rules=personality_data.personality_consistency_rules
+        )
+
 
 def create_jovani_vazquez(ai_provider=None, personality: Optional[PersonalityPort] = None) -> JovaniVazquezAgent:
     """Factory function to create Jovani Vázquez agent."""

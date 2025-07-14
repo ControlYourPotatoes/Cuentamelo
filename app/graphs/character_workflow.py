@@ -214,32 +214,31 @@ async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWo
         # Check thread engagement limits if this is a reply
         if not is_new_thread and thread_state:
             if not thread_state.can_character_reply(character_agent.character_id):
-                logger.info(f"{character_agent.character_name} cannot reply - thread limit reached")
+                logger.info(f"{character_agent.character_name} cannot reply to thread (limit reached)")
                 state["engagement_decision"] = AgentDecision.DEFER
-                state["workflow_step"] = "make_decision"
+                agent_state.last_decision = AgentDecision.DEFER
                 return state
         
         # Make engagement decision
         decision = await character_agent.make_engagement_decision(
             state=agent_state,
             context=context,
-            conversation_history=state.get("conversation_history"),
             news_item=state.get("news_item")
         )
         
-        agent_state.last_decision = decision
-        state["agent_state"] = agent_state
+        # Store decision in state
         state["engagement_decision"] = decision
-        state["workflow_step"] = "make_decision"
+        agent_state.last_decision = decision
         
-        logger.info(f"Engagement decision for {character_agent.character_name}: {decision}")
+        logger.info(f"{character_agent.character_name} decision: {decision} (confidence: {agent_state.decision_confidence:.2f})")
         
         return state
         
     except Exception as e:
-        logger.error(f"Error making engagement decision: {str(e)}")
-        state["error_details"] = str(e)
-        state["success"] = False
+        logger.error(f"Error in make_engagement_decision: {str(e)}")
+        state["engagement_decision"] = AgentDecision.DEFER
+        if "agent_state" in state:
+            state["agent_state"].error_message = str(e)
         return state
 
 
@@ -304,7 +303,7 @@ async def validate_response_consistency(state: CharacterWorkflowState) -> Charac
         # Validate personality consistency using AI provider
         if character_agent.ai_provider:
             is_consistent = await character_agent.ai_provider.validate_personality_consistency(
-                personality_data=character_agent.personality_data,
+                personality_data=character_agent.get_ai_personality_data(),
                 generated_content=generated_response
             )
         else:

@@ -262,7 +262,7 @@ class BaseCharacterAgent:
             
             # Generate response using AI provider
             response = await self.ai_provider.generate_character_response(
-                personality_data=self.personality_data.get_ai_personality_data(),
+                personality_data=self.get_ai_personality_data(),
                 context=enhanced_context,
                 conversation_history=conversation_history,
                 target_topic=target_topic,
@@ -333,7 +333,7 @@ class BaseCharacterAgent:
             
             # Generate reaction using AI provider
             response = await self.ai_provider.generate_news_reaction(
-                personality_data=self.personality_data.get_ai_personality_data(),
+                personality_data=self.get_ai_personality_data(),
                 news_headline=news_item.headline,
                 news_content=news_item.content,
                 emotional_context=emotional_context
@@ -475,20 +475,41 @@ class BaseCharacterAgent:
         return f"[{self.character_name} response temporarily unavailable]"
     
     def get_character_summary(self) -> Dict[str, Any]:
-        """Get character summary information."""
-        agent_data = self.personality_data.get_agent_personality_data()
+        """Get a summary of the character for external use."""
         return {
             "character_id": self.character_id,
             "character_name": self.character_name,
             "character_type": self.character_type,
+            "personality_traits": self.personality_data.personality_traits,
             "engagement_threshold": self.engagement_threshold,
-            "cooldown_minutes": self.cooldown_minutes,
-            "max_daily_interactions": self.max_daily_interactions,
-            "interaction_count": self.interaction_count,
-            "total_engagements": self.total_engagements,
-            "preferred_topics": list(self.preferred_topics),
-            "personality_traits": agent_data.personality_traits[:100] + "..." if len(agent_data.personality_traits) > 100 else agent_data.personality_traits
+            "topics_of_interest": self.personality_data.topics_of_interest,
+            "signature_phrases": self.personality_data.signature_phrases[:3] if self.personality_data.signature_phrases else []
         }
+    
+    def get_ai_personality_data(self) -> 'AIPersonalityData':
+        """Get the minimal AI personality data for AI providers."""
+        # Default implementation - subclasses can override
+        from app.models.ai_personality_data import AIPersonalityData
+        
+        return AIPersonalityData(
+            character_id=self.character_id,
+            character_name=self.character_name,
+            character_type=self.character_type,
+            personality_traits=self.personality_data.personality_traits,
+            background=self.personality_data.background,
+            language_style=self.personality_data.language_style,
+            interaction_style=self.personality_data.interaction_style,
+            cultural_context=self.personality_data.cultural_context,
+            signature_phrases=self.personality_data.signature_phrases,
+            common_expressions=self.personality_data.common_expressions,
+            emoji_preferences=self.personality_data.emoji_preferences,
+            topics_of_interest=self.personality_data.topics_of_interest,
+            example_responses=self.personality_data.example_responses,
+            response_templates=self.personality_data.response_templates,
+            base_energy_level=self.personality_data.base_energy_level,
+            puerto_rico_references=self.personality_data.puerto_rico_references,
+            personality_consistency_rules=self.personality_data.personality_consistency_rules
+        )
     
     def __str__(self) -> str:
         return f"{self.character_name} ({self.character_type})"
