@@ -15,6 +15,7 @@ from app.adapters.claude_ai_adapter import ClaudeAIAdapter
 from app.adapters.langgraph_orchestration_adapter import LangGraphOrchestrationAdapter
 from app.adapters.twitter_news_adapter import TwitterNewsAdapter
 from app.adapters.simulated_news_adapter import SimulatedNewsAdapter
+from app.adapters.elnuevodia_news_adapter import ElNuevoDiaNewsAdapter
 from app.tools.claude_client import ClaudeClient
 from app.tools.twitter_connector import TwitterConnector
 from app.services.personality_config_loader import PersonalityConfigLoader
@@ -148,6 +149,16 @@ class DependencyContainer:
                 
                 self._services["news_provider"] = SimulatedNewsAdapter(
                     demo_scenarios_config=demo_scenarios_config
+                )
+                
+            elif provider_type == "elnuevodia":
+                # Create El Nuevo Día news adapter for real Puerto Rican news
+                twitter_connector = TwitterConnector()
+                redis_client = RedisClient()
+                
+                self._services["news_provider"] = ElNuevoDiaNewsAdapter(
+                    twitter_connector=twitter_connector,
+                    redis_client=redis_client
                 )
                 
             elif provider_type == "mock":

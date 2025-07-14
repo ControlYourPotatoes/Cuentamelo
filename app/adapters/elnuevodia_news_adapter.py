@@ -438,6 +438,35 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
             published_at=parsed_tweet.created_at
         )
     
+    async def clear_cache(self, cache_type: Optional[str] = None) -> bool:
+        """
+        Clear cache for the El Nuevo Día adapter.
+        
+        Args:
+            cache_type: Specific cache type to clear ('tweets', 'trending_topics', 'user_info')
+                        If None, clears all caches
+                        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if cache_type:
+                # Clear specific cache type
+                pattern = f"elnuevodia:{cache_type}:*"
+                await self.redis_client.delete(pattern)
+                logger.info(f"Cleared cache for type: {cache_type}")
+            else:
+                # Clear all El Nuevo Día caches
+                pattern = "elnuevodia:*"
+                await self.redis_client.delete(pattern)
+                logger.info("Cleared all El Nuevo Día caches")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error clearing cache: {str(e)}")
+            return False
+    
     async def health_check(self) -> bool:
         """Check if El Nuevo Día news adapter is working."""
         try:

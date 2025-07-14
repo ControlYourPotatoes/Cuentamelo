@@ -10,6 +10,9 @@ from .twitter_provider import (
     TwitterProviderPort, TwitterPost, TwitterPostResult, TwitterSearchResult,
     TwitterRateLimit, TwitterPostType, TwitterPostStatus
 )
+from .news_provider import (
+    NewsProviderPort, TrendingTopic, NewsProviderInfo
+)
 
 __all__ = [
     "AIProviderPort",
@@ -27,5 +30,8 @@ __all__ = [
     "TwitterSearchResult",
     "TwitterRateLimit",
     "TwitterPostType",
-    "TwitterPostStatus"
+    "TwitterPostStatus",
+    "NewsProviderPort",
+    "TrendingTopic",
+    "NewsProviderInfo"
 ] 
