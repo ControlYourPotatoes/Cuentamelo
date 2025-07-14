@@ -217,7 +217,7 @@ class TwitterConnector(TwitterProviderPort):
                         pr_relevance = self._calculate_pr_relevance(tweet.text)
                         
                         result = TwitterSearchResult(
-                            tweet_id=tweet.id,
+                            tweet_id=str(tweet.id),  # Convert to string
                             content=tweet.text,
                             author_username=user.username,
                             author_name=user.name,
@@ -276,7 +276,7 @@ class TwitterConnector(TwitterProviderPort):
             if response.data:
                 for tweet in response.data:
                     result = TwitterSearchResult(
-                        tweet_id=tweet.id,
+                        tweet_id=str(tweet.id),  # Convert to string
                         content=tweet.text,
                         author_username=username,
                         author_name=user_response.data.name,
@@ -311,7 +311,7 @@ class TwitterConnector(TwitterProviderPort):
             user = response.includes.get("users", [{}])[0] if response.includes.get("users") else {}
             
             return TwitterSearchResult(
-                tweet_id=tweet.id,
+                tweet_id=str(tweet.id),  # Convert to string
                 content=tweet.text,
                 author_username=user.get("username", ""),
                 author_name=user.get("name", ""),
