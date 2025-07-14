@@ -6,6 +6,10 @@ from .orchestration_service import (
     SystemStatus, CharacterStatus
 )
 from .workflow_executor import WorkflowExecutorPort, WorkflowExecutionResult
+from .twitter_provider import (
+    TwitterProviderPort, TwitterPost, TwitterPostResult, TwitterSearchResult,
+    TwitterRateLimit, TwitterPostType, TwitterPostStatus
+)
 
 __all__ = [
     "AIProviderPort",
@@ -16,5 +20,12 @@ __all__ = [
     "SystemStatus",
     "CharacterStatus",
     "WorkflowExecutorPort",
-    "WorkflowExecutionResult"
+    "WorkflowExecutionResult",
+    "TwitterProviderPort",
+    "TwitterPost",
+    "TwitterPostResult",
+    "TwitterSearchResult",
+    "TwitterRateLimit",
+    "TwitterPostType",
+    "TwitterPostStatus"
 ] 
