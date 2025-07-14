@@ -7,6 +7,80 @@ from app.services.n8n_integration import n8n_service
 
 router = APIRouter(prefix="/demo", tags=["N8N Demo"])
 
+@router.post("/start")
+async def start_demo(background_tasks: BackgroundTasks):
+    """
+    Start a demo scenario - called by N8N workflow
+    
+    This is the endpoint that the N8N workflow calls to trigger a demo
+    """
+    try:
+        # Start a default demo scenario (political announcement)
+        scenario_id = "political_announcement"
+        
+        # Validate scenario exists
+        if not demo_orchestrator.get_scenario_info(scenario_id):
+            raise HTTPException(status_code=404, detail=f"Default scenario {scenario_id} not found")
+
+        # Start demo scenario in background
+        background_tasks.add_task(
+            demo_orchestrator.run_scenario,
+            scenario_id,
+            1.0  # Default speed
+        )
+
+        # Immediately notify N8N that demo is starting
+        await n8n_service.emit_event("demo_started", {
+            "scenario_id": scenario_id,
+            "scenario_title": demo_orchestrator.get_scenario_title(scenario_id),
+            "expected_duration": demo_orchestrator.get_estimated_duration(scenario_id),
+            "speed_multiplier": 1.0,
+            "triggered_by": "n8n_workflow"
+        })
+
+        return {
+            "status": "success",
+            "message": f"Demo scenario '{scenario_id}' started via N8N workflow",
+            "scenario": demo_orchestrator.get_scenario_info(scenario_id),
+            "speed_multiplier": 1.0,
+            "estimated_duration": demo_orchestrator.get_estimated_duration(scenario_id)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/test-webhook")
+async def test_webhook_event():
+    """
+    Test endpoint to send a sample event to N8N webhook
+    
+    This helps verify the webhook connection is working
+    """
+    try:
+        # Send a test event to N8N
+        test_data = {
+            "character_id": "jovani_vazquez",
+            "character_name": "Jovani Vazquez",
+            "event_type": "test_event",
+            "timestamp": datetime.utcnow().isoformat(),
+            "test_message": "This is a test event from the API"
+        }
+        
+        success = await n8n_service.emit_event("test_event", test_data)
+        
+        return {
+            "status": "success" if success else "failed",
+            "message": "Test event sent to N8N webhook",
+            "data": test_data,
+            "webhook_url": n8n_service.n8n_webhook_url,
+            "demo_mode": n8n_service.demo_mode
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/scenarios", response_model=List[Dict[str, Any]])
 async def get_demo_scenarios():
     """Get all available demo scenarios"""

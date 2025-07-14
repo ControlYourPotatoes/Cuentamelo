@@ -1,87 +1,150 @@
-# N8N Quick Start Guide
+# N8N Integration Quick Start Guide
 
-## 🚀 Quick Setup
+## Overview
 
-### 1. Enable Demo Mode
+This guide will help you get your N8N workflow connected to your Cuentamelo API for real-time AI character orchestration visualization.
 
-```bash
-python scripts/enable_demo_mode.py
+## Prerequisites
+
+1. **N8N Running**: Make sure N8N is running on `http://localhost:5678`
+2. **API Running**: Your FastAPI server should be running on `http://localhost:8000`
+3. **Environment Setup**: Configure your `.env` file with N8N settings
+
+## Step 1: Environment Configuration
+
+Add these settings to your `.env` file:
+
+```env
+# N8N Integration Settings
+N8N_WEBHOOK_URL=http://localhost:5678
+DEMO_MODE_ENABLED=true
+N8N_WEBHOOK_TIMEOUT=5
+DEMO_SPEED_MULTIPLIER=1.0
 ```
 
-### 2. Test Connection
+## Step 2: Start Your API
 
 ```bash
-python scripts/test_n8n_demo_workflow.py
+# From your project root directory
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Start N8N (if not running)
+## Step 3: Test the Integration
+
+Run the test script to verify everything is working:
 
 ```bash
-docker-compose up n8n
+python scripts/test_n8n_integration.py
 ```
 
-### 4. Import Workflow
+This will test:
 
-1. Open N8N at http://localhost:5678
-2. Go to Workflows → Import from File
-3. Select `n8n_workflow_cuentamelo.json`
-4. Activate the workflow
+- ✅ API health
+- ✅ Demo endpoints
+- ✅ N8N connection
+- ✅ Webhook events
+- ✅ Demo start functionality
 
-### 5. Test Events
+## Step 4: Import Your Workflow
+
+1. Open N8N at `http://localhost:5678`
+2. Import your workflow JSON file: `configs/fixed_n8n_workflow (28).json`
+3. The workflow should show:
+   - **Start Demo** (Manual Trigger)
+   - **Trigger Python** (HTTP Request to `http://localhost:8000/api/demo/start`)
+   - **Event Receiver** (Webhook at `/webhook/cuentamelo-event`)
+   - **Character Checks** (If nodes for Jovani and Ciudadano)
+   - **Display Nodes** (Set nodes for character information)
+   - **Response** (Respond to Webhook)
+
+## Step 5: Test the Workflow
+
+1. **Click "Start Demo"** in N8N
+2. This will trigger the HTTP request to your API
+3. Your API will start a demo scenario
+4. Events will be sent to the N8N webhook
+5. You'll see the workflow execute in real-time
+
+## API Endpoints
+
+Your API now includes these demo endpoints:
+
+- `POST /demo/start` - Start a demo (called by N8N)
+- `GET /demo/scenarios` - List available scenarios
+- `GET /demo/status` - Get demo status
+- `POST /demo/test-connection` - Test N8N connection
+- `POST /demo/test-webhook` - Test webhook event
+- `POST /demo/trigger-scenario` - Trigger specific scenario
+- `POST /demo/custom-news` - Inject custom news
+
+## Troubleshooting
+
+### API Not Starting
 
 ```bash
-# Test individual events
-python scripts/test_n8n_demo_workflow.py
+# Check if port 8000 is available
+netstat -an | grep 8000
 
-# Or trigger a full demo scenario
-curl -X POST http://localhost:8000/demo/trigger-scenario \
-  -H "Content-Type: application/json" \
-  -d '{"scenario_id": "political_announcement", "speed_multiplier": 2.0}'
+# Try different port
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-## 📡 Webhook Endpoint
+### N8N Connection Failed
 
-**Production URL**: `http://localhost:5678/webhook/cuentamelo-event`
+1. Check if N8N is running: `http://localhost:5678`
+2. Verify webhook URL in `.env`: `N8N_WEBHOOK_URL=http://localhost:5678`
+3. Enable demo mode: `DEMO_MODE_ENABLED=true`
 
-This is the exact endpoint where all Cuentamelo events are sent.
+### Workflow Not Triggering
 
-## 🎯 Event Types
+1. Check the webhook URL in your workflow: `/webhook/cuentamelo-event`
+2. Verify the HTTP request URL: `http://localhost:8000/api/demo/start`
+3. Check N8N logs for errors
 
-The workflow handles these event types:
+### Events Not Flowing
 
-- `news_discovered` - New Puerto Rican news
-- `character_analyzing` - Character evaluating relevance
-- `engagement_decision` - Character decides to respond
-- `response_generating` - AI generating response
-- `post_published` - Live Twitter post
+1. Run the test script to verify connection
+2. Check API logs for webhook errors
+3. Verify N8N webhook is active and listening
 
-## 🔧 Troubleshooting
+## Expected Workflow Behavior
 
-### Events not showing in N8N?
+When you click "Start Demo" in N8N:
 
-1. Check demo mode is enabled: `DEMO_MODE_ENABLED=true`
-2. Verify N8N is running on port 5678
-3. Confirm workflow is active in N8N
-4. Check webhook path is exactly: `cuentamelo-event`
+1. **HTTP Request** → `POST http://localhost:8000/api/demo/start`
+2. **API Response** → Starts demo scenario in background
+3. **Events Sent** → Multiple events sent to N8N webhook:
 
-### Connection issues?
+   - `demo_started`
+   - `news_discovered`
+   - `character_analyzing`
+   - `engagement_decision`
+   - `response_generating`
+   - `post_published`
+   - `demo_stopped`
 
-```bash
-# Test connection directly
-curl -X POST http://localhost:5678/webhook/cuentamelo-event \
-  -H "Content-Type: application/json" \
-  -d '{"event_type": "test", "data": {"test": true}}'
-```
+4. **Workflow Execution** → Each event triggers workflow nodes
+5. **Visual Display** → Character information displayed in N8N
 
-## 📊 Expected Results
+## Next Steps
 
-When working correctly, you should see:
+Once the basic integration is working:
 
-- ✅ All 8 tests passing
-- 📡 Events flowing to N8N in real-time
-- 🎭 Character workflows visualized
-- 🐦 Twitter posts simulated
+1. **Enhance the Workflow**: Add more visual elements, routing, and formatting
+2. **Add More Scenarios**: Create additional demo scenarios
+3. **Real Twitter Integration**: Connect to actual Twitter posting
+4. **Performance Monitoring**: Add metrics and analytics
+5. **Production Deployment**: Deploy to production environment
 
-## 🎉 Success!
+## Support
 
-Once everything is working, you'll have a beautiful real-time visualization of your AI character orchestration system!
+If you encounter issues:
+
+1. Check the test script output for specific errors
+2. Review API logs for webhook communication issues
+3. Verify N8N workflow configuration
+4. Test individual endpoints using the API documentation at `http://localhost:8000/docs`
+
+---
+
+**Happy orchestrating! 🎭🤖**

@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from app.config import settings
 from app.api import health, news, demo, webhooks
+from app.services.demo_orchestrator import demo_orchestrator
+from app.services.n8n_integration import n8n_service
 
 app = FastAPI(
     title="Cuentamelo",
@@ -11,8 +13,57 @@ app = FastAPI(
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(news.router, prefix="/news", tags=["news"])
-app.include_router(demo.router, prefix="/demo", tags=["N8N Demo"])
-app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
+app.include_router(demo.router, tags=["N8N Demo"])  # demo router already has /demo prefix
+app.include_router(webhooks.router, tags=["Webhooks"])  # webhooks router already has /webhooks prefix
+
+# Direct route for N8N workflow compatibility
+@app.post("/api/demo/start")
+async def api_demo_start(background_tasks: BackgroundTasks):
+    """
+    Direct endpoint for N8N workflow - called by N8N workflow
+    
+    This is the endpoint that the N8N workflow calls to trigger a demo
+    """
+    try:
+        # Start a default demo scenario (political announcement)
+        scenario_id = "political_announcement"
+        
+        # Validate scenario exists
+        if not demo_orchestrator.get_scenario_info(scenario_id):
+            return {
+                "status": "error",
+                "message": f"Default scenario {scenario_id} not found"
+            }
+
+        # Start demo scenario in background
+        background_tasks.add_task(
+            demo_orchestrator.run_scenario,
+            scenario_id,
+            1.0  # Default speed
+        )
+
+        # Immediately notify N8N that demo is starting
+        await n8n_service.emit_event("demo_started", {
+            "scenario_id": scenario_id,
+            "scenario_title": demo_orchestrator.get_scenario_title(scenario_id),
+            "expected_duration": demo_orchestrator.get_estimated_duration(scenario_id),
+            "speed_multiplier": 1.0,
+            "triggered_by": "n8n_workflow"
+        })
+
+        return {
+            "status": "success",
+            "message": f"Demo scenario '{scenario_id}' started via N8N workflow",
+            "scenario": demo_orchestrator.get_scenario_info(scenario_id),
+            "speed_multiplier": 1.0,
+            "estimated_duration": demo_orchestrator.get_estimated_duration(scenario_id)
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 @app.get("/")
 async def root():
