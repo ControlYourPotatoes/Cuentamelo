@@ -102,6 +102,11 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
     async def _get_cached_tweets(self, username: str, max_results: int, since_id: Optional[str] = None) -> Optional[List]:
         """Get cached tweets if available."""
         try:
+            # Test Redis connection first
+            if not await self.redis_client.ping():
+                logger.warning("Redis not available, skipping cache")
+                return None
+                
             cache_key = self._get_cache_key("tweets", username=username, max_results=max_results, since_id=since_id)
             cached_data = await self.redis_client.get(cache_key)
             
@@ -122,6 +127,11 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
             if not tweets:
                 return
                 
+            # Test Redis connection first
+            if not await self.redis_client.ping():
+                logger.warning("Redis not available, skipping cache storage")
+                return
+                
             cache_key = self._get_cache_key("tweets", username=username, max_results=max_results, since_id=since_id)
             cache_data = json.dumps([tweet.__dict__ for tweet in tweets], default=str)
             
@@ -139,6 +149,11 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
     async def _get_cached_trending_topics(self, max_topics: int) -> Optional[List]:
         """Get cached trending topics if available."""
         try:
+            # Test Redis connection first
+            if not await self.redis_client.ping():
+                logger.warning("Redis not available, skipping cache")
+                return None
+                
             cache_key = self._get_cache_key("trending_topics", max_topics=max_topics)
             cached_data = await self.redis_client.get(cache_key)
             
@@ -157,6 +172,11 @@ class ElNuevoDiaNewsAdapter(NewsProviderPort):
         """Cache trending topics with appropriate TTL."""
         try:
             if not topics:
+                return
+                
+            # Test Redis connection first
+            if not await self.redis_client.ping():
+                logger.warning("Redis not available, skipping cache storage")
                 return
                 
             cache_key = self._get_cache_key("trending_topics", max_topics=max_topics)
