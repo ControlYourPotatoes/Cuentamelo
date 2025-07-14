@@ -12,11 +12,11 @@ class Settings(BaseSettings):
 
     # APIs
     ANTHROPIC_API_KEY: str = ""
-    twitter_api_key: Optional[str] = None
-    twitter_api_secret: Optional[str] = None
-    twitter_access_token: Optional[str] = None
-    twitter_access_token_secret: Optional[str] = None
-    twitter_bearer_token: Optional[str] = None
+    TWITTER_API_KEY: Optional[str] = None
+    TWITTER_API_SECRET: Optional[str] = None
+    TWITTER_ACCESS_TOKEN: Optional[str] = None
+    TWITTER_ACCESS_TOKEN_SECRET: Optional[str] = None
+    TWITTER_BEARER_TOKEN: Optional[str] = None
 
     # Character settings
     default_language: str = "es-pr"
