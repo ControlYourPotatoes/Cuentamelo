@@ -21,6 +21,12 @@ class PersonalityTone(str, Enum):
     CONTROVERSIAL = "controversial"
     SUPPORTIVE = "supportive"
     PASSIONATE = "passionate"
+    # Extended tones for more nuanced personalities
+    APPRECIATIVE_THEATRICAL = "appreciative_theatrical"
+    ENTHUSIASTIC_PERFORMATIVE = "enthusiastic_performative"
+    WARM_CELEBRATORY = "warm_celebratory"
+    PLAYFUL_ENERGETIC = "playful_energetic"
+    AWKWARD_SERIOUS = "awkward_serious"
 
 
 class LanguageStyle(str, Enum):
