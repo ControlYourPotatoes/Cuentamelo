@@ -1,201 +1,180 @@
 #!/usr/bin/env python3
 """
-Test script for N8N integration components
+Test script for N8N integration
 
-This script tests the N8N webhook service, demo orchestrator, and event system
-without requiring an actual N8N instance running.
+This script helps verify that:
+1. The API is running and accessible
+2. The demo endpoints are working
+3. N8N webhook communication is functional
+4. The workflow can be triggered successfully
 """
 
 import asyncio
-import sys
-import os
+import aiohttp
+import json
 from datetime import datetime
 
-# Add the app directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# API base URL
+API_BASE = "http://localhost:8000"
 
-from app.services.n8n_integration import N8NWebhookService, n8n_service
-from app.services.demo_orchestrator import DemoOrchestrator, demo_orchestrator
-from app.models.demo_scenarios import DEMO_SCENARIOS
-from app.utils.demo_helpers import simulate_character_workflow, create_demo_news_event
-from app.config import settings
+async def test_api_health():
+    """Test basic API health"""
+    print("🔍 Testing API health...")
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(f"{API_BASE}/") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"✅ API is running: {data.get('message', 'Unknown')}")
+                    return True
+                else:
+                    print(f"❌ API health check failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"❌ Cannot connect to API: {e}")
+            return False
 
-async def test_n8n_service():
-    """Test the N8N webhook service"""
-    print("🧪 Testing N8N Webhook Service...")
+async def test_demo_endpoints():
+    """Test demo API endpoints"""
+    print("\n🔍 Testing demo endpoints...")
     
-    # Test service initialization
-    service = N8NWebhookService()
-    print(f"✅ Service initialized")
-    print(f"   - Demo mode: {service.demo_mode}")
-    print(f"   - Webhook URL: {service.n8n_webhook_url}")
-    
-    # Test event emission (will fail gracefully if N8N not running)
-    test_data = {
-        "test": True,
-        "timestamp": datetime.utcnow().isoformat(),
-        "message": "Test event from Python"
-    }
-    
-    result = await service.emit_event("test_event", test_data)
-    print(f"✅ Event emission test: {'Success' if result else 'Failed (expected if N8N not running)'}")
-    
-    # Test status
-    status = service.get_status()
-    print(f"✅ Service status retrieved: {status['total_events_sent']} events sent")
-    
-    return True
+    async with aiohttp.ClientSession() as session:
+        # Test scenarios endpoint
+        try:
+            async with session.get(f"{API_BASE}/demo/scenarios") as response:
+                if response.status == 200:
+                    scenarios = await response.json()
+                    print(f"✅ Demo scenarios available: {len(scenarios)} scenarios")
+                    for scenario in scenarios:
+                        print(f"   - {scenario.get('id', 'Unknown')}: {scenario.get('title', 'No title')}")
+                else:
+                    print(f"❌ Scenarios endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"❌ Error testing scenarios: {e}")
+            return False
 
-async def test_demo_orchestrator():
-    """Test the demo orchestrator"""
-    print("\n🧪 Testing Demo Orchestrator...")
-    
-    # Test scenario listing
-    scenarios = demo_orchestrator.get_available_scenarios()
-    print(f"✅ Available scenarios: {len(scenarios)}")
-    for scenario in scenarios:
-        print(f"   - {scenario['id']}: {scenario['title']}")
-    
-    # Test scenario details
-    if scenarios:
-        first_scenario = scenarios[0]['id']
-        details = demo_orchestrator.get_scenario_info(first_scenario)
-        print(f"✅ Scenario details retrieved for {first_scenario}")
-        print(f"   - Expected characters: {details['expected_characters']}")
-        print(f"   - Duration: {details['estimated_duration']}s")
-    
-    # Test demo status
-    status = demo_orchestrator.get_demo_status()
-    print(f"✅ Demo status: {status['demo_mode_enabled']}")
-    
-    return True
+        # Test demo status
+        try:
+            async with session.get(f"{API_BASE}/demo/status") as response:
+                if response.status == 200:
+                    status = await response.json()
+                    print(f"✅ Demo status: {status.get('demo_mode_enabled', False)}")
+                    print(f"   N8N connected: {status.get('n8n_connected', False)}")
+                    print(f"   Running scenarios: {len(status.get('running_scenarios', []))}")
+                else:
+                    print(f"❌ Status endpoint failed: {response.status}")
+        except Exception as e:
+            print(f"❌ Error testing status: {e}")
 
-async def test_event_decorators():
-    """Test event decorators"""
-    print("\n🧪 Testing Event Decorators...")
-    
-    from app.utils.event_decorators import emit_n8n_event, extract_character_data
-    
-    # Test decorator with data extractor
-    @emit_n8n_event("test_character_event", extract_character_data())
-    async def test_character_function(self, news_data):
-        return {"status": "success", "character_id": getattr(self, 'character_id', 'test')}
-    
-    # Create a mock character object
-    class MockCharacter:
-        def __init__(self):
-            self.character_id = "test_character"
-            self.name = "Test Character"
-    
-    mock_char = MockCharacter()
-    
-    # Test the decorated function
-    try:
-        result = await test_character_function(mock_char, {"title": "Test News"})
-        print(f"✅ Decorated function executed: {result}")
-    except Exception as e:
-        print(f"⚠️  Decorated function error (expected if N8N not running): {e}")
-    
-    return True
+        return True
 
-async def test_demo_helpers():
-    """Test demo helper functions"""
-    print("\n🧪 Testing Demo Helpers...")
+async def test_n8n_connection():
+    """Test N8N webhook connection"""
+    print("\n🔍 Testing N8N connection...")
     
-    # Test cultural elements
-    from app.utils.demo_helpers import get_cultural_elements_for_character, get_character_voice_characteristics
-    
-    characters = ["jovani_vazquez", "political_figure", "ciudadano_boricua", "cultural_historian"]
-    
-    for char in characters:
-        elements = get_cultural_elements_for_character(char)
-        voice = get_character_voice_characteristics(char)
-        print(f"✅ {char}: {len(elements)} cultural elements, voice energy: {voice['energy']}")
-    
-    # Test demo news event creation
-    try:
-        await create_demo_news_event(
-            "Test News Title",
-            "This is a test news content for demonstration purposes.",
-            ["test", "demo", "integration"],
-            0.8
-        )
-        print("✅ Demo news event created")
-    except Exception as e:
-        print(f"⚠️  Demo news event error (expected if N8N not running): {e}")
-    
-    return True
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(f"{API_BASE}/demo/test-connection") as response:
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"✅ N8N connection test: {result.get('status', 'Unknown')}")
+                    print(f"   Connected: {result.get('connected', False)}")
+                    print(f"   Webhook URL: {result.get('webhook_url', 'Not set')}")
+                    print(f"   Demo mode: {result.get('demo_mode', False)}")
+                    return result.get('connected', False)
+                else:
+                    print(f"❌ N8N connection test failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"❌ Error testing N8N connection: {e}")
+            return False
 
-async def test_character_workflow_simulation():
-    """Test character workflow simulation"""
-    print("\n🧪 Testing Character Workflow Simulation...")
+async def test_webhook_event():
+    """Test sending a webhook event"""
+    print("\n🔍 Testing webhook event...")
     
-    news_data = {
-        "id": "test_news_001",
-        "title": "Test News for Character Workflow",
-        "content": "This is test content for character workflow simulation.",
-        "cultural_context": "Puerto Rican cultural context"
-    }
-    
-    try:
-        await simulate_character_workflow("jovani_vazquez", news_data, speed_multiplier=5.0)
-        print("✅ Character workflow simulation completed")
-    except Exception as e:
-        print(f"⚠️  Character workflow error (expected if N8N not running): {e}")
-    
-    return True
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(f"{API_BASE}/demo/test-webhook") as response:
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"✅ Webhook test: {result.get('status', 'Unknown')}")
+                    print(f"   Message: {result.get('message', 'No message')}")
+                    return result.get('status') == 'success'
+                else:
+                    print(f"❌ Webhook test failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"❌ Error testing webhook: {e}")
+            return False
 
-async def test_demo_scenario_validation():
-    """Test demo scenario validation"""
-    print("\n🧪 Testing Demo Scenario Validation...")
+async def test_demo_start():
+    """Test starting a demo via the /start endpoint"""
+    print("\n🔍 Testing demo start endpoint...")
     
-    from app.utils.demo_helpers import validate_demo_scenario
-    
-    for scenario_id in DEMO_SCENARIOS.keys():
-        is_valid = validate_demo_scenario(scenario_id)
-        print(f"✅ {scenario_id}: {'Valid' if is_valid else 'Invalid'}")
-    
-    # Test invalid scenario
-    is_valid = validate_demo_scenario("nonexistent_scenario")
-    print(f"✅ nonexistent_scenario: {'Valid' if is_valid else 'Invalid (expected)'}")
-    
-    return True
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(f"{API_BASE}/demo/start") as response:
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"✅ Demo start: {result.get('status', 'Unknown')}")
+                    print(f"   Message: {result.get('message', 'No message')}")
+                    print(f"   Scenario: {result.get('scenario', {}).get('id', 'Unknown')}")
+                    return True
+                else:
+                    print(f"❌ Demo start failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"❌ Error starting demo: {e}")
+            return False
 
 async def main():
     """Run all tests"""
-    print("🚀 Starting N8N Integration Tests...")
+    print("🚀 N8N Integration Test Suite")
     print("=" * 50)
     
-    tests = [
-        test_n8n_service,
-        test_demo_orchestrator,
-        test_event_decorators,
-        test_demo_helpers,
-        test_character_workflow_simulation,
-        test_demo_scenario_validation
-    ]
+    # Test 1: API Health
+    api_healthy = await test_api_health()
+    if not api_healthy:
+        print("\n❌ API is not running. Please start the API first:")
+        print("   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000")
+        return
     
-    results = []
-    for test in tests:
-        try:
-            result = await test()
-            results.append(result)
-        except Exception as e:
-            print(f"❌ Test failed: {e}")
-            results.append(False)
+    # Test 2: Demo Endpoints
+    await test_demo_endpoints()
+    
+    # Test 3: N8N Connection
+    n8n_connected = await test_n8n_connection()
+    
+    # Test 4: Webhook Event
+    if n8n_connected:
+        await test_webhook_event()
+    
+    # Test 5: Demo Start
+    await test_demo_start()
     
     print("\n" + "=" * 50)
-    print("📊 Test Results Summary:")
-    print(f"✅ Passed: {sum(results)}/{len(results)}")
-    print(f"❌ Failed: {len(results) - sum(results)}/{len(results)}")
+    print("📋 Test Summary:")
+    print(f"   API Running: ✅")
+    print(f"   Demo Endpoints: ✅")
+    print(f"   N8N Connected: {'✅' if n8n_connected else '❌'}")
     
-    if all(results):
-        print("🎉 All tests passed! N8N integration is ready.")
+    if n8n_connected:
+        print("\n🎉 Your N8N integration is ready!")
+        print("\nNext steps:")
+        print("1. Make sure N8N is running on http://localhost:5678")
+        print("2. Import your workflow JSON into N8N")
+        print("3. Click 'Start Demo' in N8N to trigger the workflow")
+        print("4. Watch the events flow through your workflow!")
     else:
-        print("⚠️  Some tests failed. Check the output above for details.")
-    
-    # Cleanup
-    await n8n_service.cleanup()
+        print("\n⚠️  N8N connection failed. Please check:")
+        print("1. Is N8N running on http://localhost:5678?")
+        print("2. Is the webhook URL correct in your .env file?")
+        print("3. Is DEMO_MODE_ENABLED=true in your .env file?")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

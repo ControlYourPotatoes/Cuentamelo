@@ -213,15 +213,7 @@ async def make_engagement_decision(state: CharacterWorkflowState) -> CharacterWo
         
         agent_state.current_step = "make_decision"
         
-        # Debug logging
-        print(f"🔍 DEBUG: Making engagement decision for {character_agent.character_name}")
-        print(f"🔍 DEBUG: Agent state workflow_complete: {agent_state.workflow_complete}")
-        print(f"🔍 DEBUG: Agent state current_step: {agent_state.current_step}")
-        print(f"🔍 DEBUG: Agent state cooldown_until: {agent_state.cooldown_until}")
         logger.info(f"Making engagement decision for {character_agent.character_name}")
-        logger.info(f"Agent state workflow_complete: {agent_state.workflow_complete}")
-        logger.info(f"Agent state current_step: {agent_state.current_step}")
-        logger.info(f"Agent state cooldown_until: {agent_state.cooldown_until}")
         
         # Check thread engagement limits if this is a reply
         if not is_new_thread and thread_state:
@@ -350,10 +342,6 @@ async def post_to_twitter(state: CharacterWorkflowState) -> CharacterWorkflowSta
         agent_state = state["agent_state"]
         generated_response = state.get("generated_response")
         
-        # Debug logging
-        print(f"🔍 DEBUG: Post to Twitter step for {character_agent.character_name}")
-        print(f"🔍 DEBUG: Generated response: {generated_response[:50]}..." if generated_response else "🔍 DEBUG: No generated response")
-        
         agent_state.current_step = "post_to_twitter"
         
         # Only post if we have a valid response
@@ -373,17 +361,14 @@ async def post_to_twitter(state: CharacterWorkflowState) -> CharacterWorkflowSta
                     state["twitter_tweet_url"] = f"https://twitter.com/CuentameloAgent/status/{post_result.twitter_tweet_id}"
                     logger.info(f"Successfully posted tweet for {character_agent.character_name}: {post_result.twitter_tweet_id}")
                 else:
-                    print(f"❌ Twitter post failed: {post_result.error_message}")
                     logger.error(f"Failed to post tweet for {character_agent.character_name}: {post_result.error_message}")
                     state["tweet_posted"] = False
                     state["twitter_error"] = post_result.error_message
             else:
-                print(f"❌ No Twitter provider available for {character_agent.character_name}")
                 logger.warning(f"No Twitter provider available for {character_agent.character_name}")
                 state["tweet_posted"] = False
                 state["twitter_error"] = "No Twitter provider configured"
         else:
-            print(f"❌ No generated response to post for {character_agent.character_name}")
             state["tweet_posted"] = False
             state["twitter_error"] = "No generated response to post"
             logger.warning(f"No generated response to post for {character_agent.character_name}")
