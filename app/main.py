@@ -1,6 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks
 from app.config import settings
-from app.api import health, news, demo, webhooks
+from app.api import health, news, demo, webhooks, dashboard, frontend, command_api
 from app.services.demo_orchestrator import demo_orchestrator
 from app.services.n8n_integration import n8n_service
 
@@ -15,6 +15,9 @@ app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(news.router, prefix="/news", tags=["news"])
 app.include_router(demo.router, tags=["N8N Demo"])  # demo router already has /demo prefix
 app.include_router(webhooks.router, tags=["Webhooks"])  # webhooks router already has /webhooks prefix
+app.include_router(dashboard.router, tags=["Dashboard"])  # dashboard router already has /api/dashboard prefix
+app.include_router(frontend.router, tags=["Frontend"])  # frontend router already has /api/frontend prefix
+app.include_router(command_api.router, tags=["Commands"])  # command_api router already has /api/commands prefix
 
 # Direct route for N8N workflow compatibility
 @app.post("/api/demo/start")
