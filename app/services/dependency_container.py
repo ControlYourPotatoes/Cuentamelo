@@ -12,6 +12,8 @@ from app.ports.ai_provider import AIProviderPort
 from app.ports.orchestration_service import OrchestrationServicePort
 from app.ports.news_provider import NewsProviderPort
 from app.ports.twitter_provider import TwitterProviderPort
+from app.ports.frontend_port import FrontendPort, EventBus, UserSessionManager, AnalyticsEngine
+from app.ports.command_broker_port import CommandBrokerPort
 from app.adapters.claude_ai_adapter import ClaudeAIAdapter
 from app.adapters.langgraph_orchestration_adapter import LangGraphOrchestrationAdapter
 from app.adapters.twitter_news_adapter import TwitterNewsAdapter
@@ -21,6 +23,10 @@ from app.tools.claude_client import ClaudeClient
 from app.tools.twitter_connector import TwitterConnector
 from app.services.personality_config_loader import PersonalityConfigLoader
 from app.services.redis_client import RedisClient
+from app.services.n8n_frontend_service import N8NFrontendService
+from app.services.frontend_event_bus import FrontendEventBus
+from app.services.command_broker_service import CommandBrokerService
+from app.services.command_handler import CommandHandler
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -202,6 +208,179 @@ class DependencyContainer:
         return self._services["twitter_provider"]
 
     @lru_cache(maxsize=1)
+    def get_frontend_service(self) -> FrontendPort:
+        """
+        Get the frontend service implementation.
+        
+        This demonstrates dependency injection - we return an interface,
+        not a concrete implementation. This makes testing and swapping easier.
+        """
+        if "frontend_service" not in self._services:
+            
+            # Check configuration for frontend provider
+            provider_type = self.config.get("frontend_provider", "n8n")
+            
+            if provider_type == "n8n":
+                # Create N8N frontend service with dependency injection
+                n8n_webhook_service = self.get_n8n_webhook_service()
+                agent_factory = self.get_agent_factory()
+                demo_orchestrator = self.get_demo_orchestrator()
+                event_bus = self.get_frontend_event_bus()
+                
+                self._services["frontend_service"] = N8NFrontendService(
+                    n8n_webhook_service=n8n_webhook_service,
+                    agent_factory=agent_factory,
+                    demo_orchestrator=demo_orchestrator,
+                    event_bus=event_bus
+                )
+                
+            elif provider_type == "mock":
+                # For testing - inject a mock frontend service
+                self._services["frontend_service"] = self._create_mock_frontend_service()
+                
+            else:
+                raise ValueError(f"Unknown frontend provider: {provider_type}")
+            
+            logger.info(f"Created frontend service: {provider_type}")
+        
+        return self._services["frontend_service"]
+
+    @lru_cache(maxsize=1)
+    def get_frontend_event_bus(self) -> EventBus:
+        """
+        Get the frontend event bus.
+        
+        This provides real-time event communication for the frontend.
+        """
+        if "frontend_event_bus" not in self._services:
+            redis_client = self.get_redis_client()
+            self._services["frontend_event_bus"] = FrontendEventBus(redis_client)
+            logger.info("Created frontend event bus")
+        
+        return self._services["frontend_event_bus"]
+
+    @lru_cache(maxsize=1)
+    def get_user_session_manager(self) -> UserSessionManager:
+        """
+        Get the user session manager.
+        
+        This manages user sessions and permissions.
+        """
+        if "user_session_manager" not in self._services:
+            # For now, we'll create a simple implementation
+            # TODO: Implement proper UserSessionManager
+            self._services["user_session_manager"] = self._create_mock_user_session_manager()
+            logger.info("Created user session manager")
+        
+        return self._services["user_session_manager"]
+
+    @lru_cache(maxsize=1)
+    def get_analytics_engine(self) -> AnalyticsEngine:
+        """
+        Get the analytics engine.
+        
+        This processes and provides analytics data.
+        """
+        if "analytics_engine" not in self._services:
+            # For now, we'll create a simple implementation
+            # TODO: Implement proper AnalyticsEngine
+            self._services["analytics_engine"] = self._create_mock_analytics_engine()
+            logger.info("Created analytics engine")
+        
+        return self._services["analytics_engine"]
+
+    @lru_cache(maxsize=1)
+    def get_command_broker(self) -> CommandBrokerPort:
+        """Get the command broker service"""
+        if "command_broker" not in self._services:
+
+            command_handler = self.get_command_handler()
+            redis_client = self.get_redis_client()
+            event_bus = self.get_frontend_event_bus()
+
+            self._services["command_broker"] = CommandBrokerService(
+                command_handler=command_handler,
+                redis_client=redis_client,
+                event_bus=event_bus
+            )
+
+            logger.info("Created command broker service")
+
+        return self._services["command_broker"]
+
+    @lru_cache(maxsize=1)
+    def get_command_handler(self) -> CommandHandler:
+        """Get the command handler service"""
+        if "command_handler" not in self._services:
+
+            frontend_service = self.get_frontend_service()
+            orchestration_service = self.get_orchestration_service()
+            event_bus = self.get_frontend_event_bus()
+            session_manager = self.get_user_session_manager()
+
+            self._services["command_handler"] = CommandHandler(
+                frontend_service=frontend_service,
+                orchestration_service=orchestration_service,
+                event_bus=event_bus,
+                session_manager=session_manager
+            )
+
+            logger.info("Created command handler service")
+
+        return self._services["command_handler"]
+
+    @lru_cache(maxsize=1)
+    def get_redis_client(self) -> RedisClient:
+        """Get the Redis client service"""
+        if "redis_client" not in self._services:
+            self._services["redis_client"] = RedisClient()
+            logger.info("Created Redis client")
+        
+        return self._services["redis_client"]
+
+    @lru_cache(maxsize=1)
+    def get_agent_factory(self) -> 'AgentFactory':
+        """
+        Get the agent factory service.
+        
+        This service provides centralized agent creation and management.
+        """
+        if "agent_factory" not in self._services:
+            from app.agents.agent_factory import AgentFactory
+            self._services["agent_factory"] = AgentFactory()
+            logger.info("Created agent factory")
+        
+        return self._services["agent_factory"]
+
+    @lru_cache(maxsize=1)
+    def get_demo_orchestrator(self) -> 'DemoOrchestrator':
+        """
+        Get the demo orchestrator service.
+        
+        This service manages demo scenarios and orchestration.
+        """
+        if "demo_orchestrator" not in self._services:
+            from app.services.demo_orchestrator import DemoOrchestrator
+            self._services["demo_orchestrator"] = DemoOrchestrator()
+            logger.info("Created demo orchestrator")
+        
+        return self._services["demo_orchestrator"]
+
+    @lru_cache(maxsize=1)
+    def get_n8n_webhook_service(self) -> 'N8NWebhookService':
+        """
+        Get the N8N webhook service.
+        
+        This service handles N8N webhook communication.
+        """
+        if "n8n_webhook_service" not in self._services:
+            from app.services.n8n_integration import N8NWebhookService
+            self._services["n8n_webhook_service"] = N8NWebhookService()
+            logger.info("Created N8N webhook service")
+        
+        return self._services["n8n_webhook_service"]
+
+    @lru_cache(maxsize=1)
     def get_personality_config_loader(self) -> PersonalityConfigLoader:
         """
         Get the personality configuration loader service.
@@ -249,6 +428,21 @@ class DependencyContainer:
         """Create a mock Twitter provider for testing."""
         from app.tests.mocks.mock_twitter_provider import MockTwitterProvider
         return MockTwitterProvider()
+
+    def _create_mock_frontend_service(self) -> FrontendPort:
+        """Create a mock frontend service for testing."""
+        from app.tests.mocks.mock_frontend_service import MockFrontendService
+        return MockFrontendService()
+
+    def _create_mock_user_session_manager(self) -> UserSessionManager:
+        """Create a mock user session manager for testing."""
+        from app.tests.mocks.mock_user_session_manager import MockUserSessionManager
+        return MockUserSessionManager()
+
+    def _create_mock_analytics_engine(self) -> AnalyticsEngine:
+        """Create a mock analytics engine for testing."""
+        from app.tests.mocks.mock_analytics_engine import MockAnalyticsEngine
+        return MockAnalyticsEngine()
     
     def configure_for_testing(self):
         """Configure the container for testing with mocks."""
