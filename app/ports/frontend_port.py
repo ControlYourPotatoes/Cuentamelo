@@ -103,6 +103,7 @@ class NewsInjectionResult(BaseModel):
     status: str
     injected_at: datetime
     processed_by: List[str] = []
+    error: Optional[str] = None
 
 
 class UserInteraction(BaseModel):

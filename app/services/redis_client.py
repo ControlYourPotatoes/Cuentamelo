@@ -135,6 +135,25 @@ class RedisClient:
             logger.error(f"Redis exists failed for key {key}: {str(e)}")
             return False
     
+    async def publish(self, channel: str, message: str) -> int:
+        """
+        Publish message to Redis channel.
+        
+        Args:
+            channel: Redis channel name
+            message: Message to publish
+            
+        Returns:
+            Number of clients that received the message
+        """
+        try:
+            client = await self._get_client()
+            result = await client.publish(channel, message)
+            return result
+        except Exception as e:
+            logger.error(f"Redis publish failed for channel {channel}: {str(e)}")
+            return 0
+    
     async def close(self):
         """Close Redis connection."""
         if self._client:

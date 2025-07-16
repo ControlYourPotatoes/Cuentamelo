@@ -201,4 +201,8 @@ def list_custom_agents() -> list[str]:
     CUSTOM_AGENT_CREATORS = {
         "jovani_vazquez": create_jovani_vazquez,
     }
-    return list(CUSTOM_AGENT_CREATORS.keys()) 
+    return list(CUSTOM_AGENT_CREATORS.keys())
+
+
+# Global instance for backward compatibility
+agent_factory = AgentFactory() 
