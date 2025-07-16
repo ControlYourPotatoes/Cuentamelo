@@ -163,6 +163,118 @@ def event_loop():
     loop.close()
 
 
+# Mock service fixtures for new infrastructure
+from unittest.mock import AsyncMock, MagicMock, patch
+from app.ports.command_broker_port import CommandResponse, CommandStatus
+from app.ports.twitter_provider import TwitterPostResult, TwitterPost, TwitterPostStatus
+
+@pytest.fixture
+def mock_redis_client():
+    """Mock Redis client for testing."""
+    redis = AsyncMock()
+    redis.set = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.publish = AsyncMock()
+    redis.subscribe = AsyncMock()
+    return redis
+
+
+@pytest.fixture
+def mock_event_bus():
+    """Mock event bus for testing."""
+    event_bus = AsyncMock()
+    event_bus.publish_event = AsyncMock()
+    return event_bus
+
+
+@pytest.fixture
+def mock_command_handler():
+    """Mock command handler for testing."""
+    handler = AsyncMock()
+    handler.execute_command.return_value = CommandResponse(
+        command_id="test_cmd_001",
+        status=CommandStatus.COMPLETED,
+        result={"message": "Test command executed successfully"},
+        timestamp=datetime.now(timezone.utc),
+        execution_time=0.5
+    )
+    return handler
+
+
+@pytest.fixture
+def mock_ai_provider():
+    """Mock AI provider for testing."""
+    provider = AsyncMock()
+    provider.generate_response = AsyncMock(return_value="Mock AI response")
+    provider.health_check = AsyncMock(return_value=True)
+    return provider
+
+
+@pytest.fixture
+def mock_news_provider():
+    """Mock news provider for testing."""
+    provider = AsyncMock()
+    provider.discover_latest_news = AsyncMock(return_value=[])
+    provider.get_trending_topics = AsyncMock(return_value=[])
+    provider.health_check = AsyncMock(return_value=True)
+    return provider
+
+
+@pytest.fixture
+def mock_twitter_provider():
+    """Mock Twitter provider for testing."""
+    provider = AsyncMock()
+    provider.post_tweet = AsyncMock(return_value=TwitterPostResult(
+        success=True,
+        twitter_tweet_id="123456789",
+        post=TwitterPost(
+            content="Test tweet",
+            character_id="test_character",
+            character_name="Test Character",
+            status=TwitterPostStatus.POSTED
+        )
+    ))
+    return provider
+
+
+@pytest.fixture
+def mock_orchestration_service():
+    """Mock orchestration service for testing."""
+    service = AsyncMock()
+    service.execute_orchestration_cycle = AsyncMock(return_value={
+        "success": True,
+        "execution_time_ms": 1000,
+        "character_reactions": []
+    })
+    return service
+
+
+@pytest.fixture
+def dependency_container_with_mocks(mock_ai_provider, mock_news_provider, mock_twitter_provider, mock_orchestration_service):
+    """Dependency container configured with mock services."""
+    with patch('app.services.dependency_container.get_settings') as mock_settings:
+        mock_settings.return_value = MagicMock(
+            ANTHROPIC_API_KEY="test_key",
+            TWITTER_BEARER_TOKEN="test_token",
+            DEMO_MODE_ENABLED=True
+        )
+        
+        container = DependencyContainer({
+            "ai_provider": "mock",
+            "news_provider": "mock", 
+            "twitter_provider": "mock",
+            "orchestration": "mock"
+        })
+        
+        # Inject mock services directly
+        container._services["ai_provider"] = mock_ai_provider
+        container._services["news_provider"] = mock_news_provider
+        container._services["twitter_provider"] = mock_twitter_provider
+        container._services["orchestration_service"] = mock_orchestration_service
+        
+        return container
+
+
 # Test data constants
 MUSIC_FESTIVAL_NEWS = {
     "id": "music_festival",
