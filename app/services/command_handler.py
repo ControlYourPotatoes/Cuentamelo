@@ -6,7 +6,7 @@ with existing services like frontend, orchestration, and event bus.
 """
 
 import logging
-from typing import Dict, Any, callable
+from typing import Dict, Any, Callable
 from datetime import datetime
 from app.ports.command_broker_port import CommandType, CommandStatus, CommandRequest, CommandResponse
 from app.ports.frontend_port import FrontendPort, FrontendEvent, UserInteraction, CustomNews, ScenarioCreate
@@ -32,7 +32,7 @@ class CommandHandler:
         self.session_manager = session_manager
         self.command_executors = self._register_command_executors()
     
-    def _register_command_executors(self) -> Dict[CommandType, callable]:
+    def _register_command_executors(self) -> Dict[CommandType, Callable]:
         """Register command executors for each command type"""
         return {
             CommandType.SCENARIO_TRIGGER: self._execute_scenario_trigger,
