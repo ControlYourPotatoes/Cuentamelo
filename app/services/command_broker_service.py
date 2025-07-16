@@ -97,6 +97,7 @@ class CommandBrokerService(CommandBrokerPort):
             return CommandResponse(
                 command_id=command_id,
                 status=CommandStatus.EXECUTING,
+                execution_time=0.0,  # Still executing, no time yet
                 timestamp=datetime.utcnow(),
                 metadata={"active": True}
             )
@@ -112,6 +113,7 @@ class CommandBrokerService(CommandBrokerPort):
             return CommandResponse(
                 command_id=command_id,
                 status=CommandStatus.PENDING,
+                execution_time=0.0,  # Not started yet
                 timestamp=datetime.utcnow(),
                 metadata={"command_found": True}
             )
