@@ -180,7 +180,11 @@ class N8NFrontendService(FrontendPort):
                 
         except Exception as e:
             logger.error(f"Error creating custom scenario: {e}")
-            raise
+            return ScenarioResult(
+                scenario_id=str(uuid.uuid4()),
+                status="failed",
+                error=str(e)
+            )
     
     async def inject_custom_news(self, news: CustomNews) -> NewsInjectionResult:
         """
@@ -228,7 +232,13 @@ class N8NFrontendService(FrontendPort):
             
         except Exception as e:
             logger.error(f"Error injecting custom news: {e}")
-            raise
+            return NewsInjectionResult(
+                news_id=str(uuid.uuid4()),
+                status="failed",
+                injected_at=datetime.now(timezone.utc),
+                processed_by=[],
+                error=str(e)
+            )
     
     async def user_interact_with_character(self, interaction: UserInteraction) -> CharacterResponse:
         """
@@ -342,7 +352,9 @@ class N8NFrontendService(FrontendPort):
         """Get list of active scenarios."""
         try:
             # This depends on your demo orchestrator implementation
-            if hasattr(self.demo_orchestrator, 'get_active_scenarios'):
+            if hasattr(self.demo_orchestrator, 'get_running_scenarios'):
+                return self.demo_orchestrator.get_running_scenarios()
+            elif hasattr(self.demo_orchestrator, 'get_active_scenarios'):
                 return self.demo_orchestrator.get_active_scenarios()
             else:
                 return []
