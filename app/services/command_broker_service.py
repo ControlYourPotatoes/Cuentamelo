@@ -8,7 +8,7 @@ This service acts as the central broker for all commands from different interfac
 import logging
 import json
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.ports.command_broker_port import CommandBrokerPort, CommandRequest, CommandResponse, CommandStatus
 from app.ports.frontend_port import FrontendEvent, EventBus
 from app.services.redis_client import RedisClient
@@ -38,7 +38,7 @@ class CommandBrokerService(CommandBrokerPort):
         # Store command in Redis for persistence
         await self.redis_client.set(
             f"command:{command.command_id}",
-            command.json(),
+            command.model_dump_json(),
             ttl=3600  # 1 hour
         )
         
@@ -48,7 +48,7 @@ class CommandBrokerService(CommandBrokerPort):
         # Emit command submitted event
         await self.event_bus.publish_event(FrontendEvent(
             event_type="command_submitted",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             data={
                 "command_id": command.command_id, 
                 "command_type": command.command_type.value,
@@ -64,7 +64,7 @@ class CommandBrokerService(CommandBrokerPort):
         # Store response
         await self.redis_client.set(
             f"command_response:{command.command_id}",
-            response.json(),
+            response.model_dump_json(),
             ttl=3600  # 1 hour
         )
         
@@ -75,7 +75,7 @@ class CommandBrokerService(CommandBrokerPort):
         # Emit command completed event
         await self.event_bus.publish_event(FrontendEvent(
             event_type="command_completed",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             data={
                 "command_id": command.command_id, 
                 "status": response.status.value,
@@ -98,14 +98,14 @@ class CommandBrokerService(CommandBrokerPort):
                 command_id=command_id,
                 status=CommandStatus.EXECUTING,
                 execution_time=0.0,  # Still executing, no time yet
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"active": True}
             )
         
         # Get response from Redis
         response_data = await self.redis_client.get(f"command_response:{command_id}")
         if response_data:
-            return CommandResponse.parse_raw(response_data)
+            return CommandResponse.model_validate_json(response_data)
         
         # Check if command exists but no response
         command_data = await self.redis_client.get(f"command:{command_id}")
@@ -114,7 +114,7 @@ class CommandBrokerService(CommandBrokerPort):
                 command_id=command_id,
                 status=CommandStatus.PENDING,
                 execution_time=0.0,  # Not started yet
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"command_found": True}
             )
         
@@ -130,7 +130,7 @@ class CommandBrokerService(CommandBrokerPort):
             # Emit command cancelled event
             await self.event_bus.publish_event(FrontendEvent(
                 event_type="command_cancelled",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 data={"command_id": command_id},
                 source="command_broker"
             ))
@@ -153,11 +153,11 @@ class CommandBrokerService(CommandBrokerPort):
                 response_data = await self.redis_client.get(key_str)
                 if response_data:
                     try:
-                        response = CommandResponse.parse_raw(response_data)
+                        response = CommandResponse.model_validate_json(response_data)
                         command_id = key_str.replace("command_response:", "")
                         command_data = await self.redis_client.get(f"command:{command_id}")
                         if command_data:
-                            command = CommandRequest.parse_raw(command_data)
+                            command = CommandRequest.model_validate_json(command_data)
                             if command.session_id == session_id:
                                 responses.append(response)
                     except Exception as e:
