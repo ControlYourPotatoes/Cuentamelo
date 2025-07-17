@@ -205,7 +205,7 @@ class N8NFrontendService(FrontendPort):
                 timestamp=datetime.now(timezone.utc),
                 data={
                     "news_id": news_id,
-                    "news": news.dict()
+                    "news": news.model_dump()
                 },
                 source="n8n_frontend_service"
             ))

@@ -7,11 +7,10 @@ between frontend components and the backend system using Redis pub/sub.
 
 import logging
 import json
-from typing import Optional, Dict, Any
+import asyncio
+from typing import Dict, List, Optional, Callable
 from datetime import datetime, timezone
-
-from app.ports.frontend_port import EventBus, FrontendEvent
-from app.services.redis_client import RedisClient
+from app.ports.frontend_port import FrontendEvent, EventBus, EventSubscriber
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class FrontendEventBus(EventBus):
     components and the backend system using Redis pub/sub mechanism.
     """
     
-    def __init__(self, redis_client: RedisClient):
+    def __init__(self, redis_client):
         """
         Initialize frontend event bus.
         
@@ -32,12 +31,13 @@ class FrontendEventBus(EventBus):
             redis_client: Redis client for pub/sub communication
         """
         self.redis_client = redis_client
-        self.pubsub = None
-        self._active_subscriptions: Dict[str, bool] = {}
+        self.subscribers: Dict[str, List[EventSubscriber]] = {}
+        self._running = False
+        self._task: Optional[asyncio.Task] = None
         
         logger.info("Frontend Event Bus initialized")
     
-    async def publish_event(self, event: FrontendEvent) -> None:
+    async def publish_event(self, event: FrontendEvent) -> bool:
         """
         Publish frontend event to all subscribers.
         
@@ -45,24 +45,69 @@ class FrontendEventBus(EventBus):
             event: Event to publish.
         """
         try:
-            # Convert event to JSON
-            event_json = event.json()
+            # Convert event to JSON for Redis
+            event_json = event.model_dump_json()
             
             # Publish to Redis channel
-            await self.redis_client.publish("frontend:events", event_json)
+            channel = f"frontend_events:{event.session_id}" if event.session_id else "frontend_events:global"
+            await self.redis_client.publish(channel, event_json)
             
-            # Also publish to session-specific channel if session_id is provided
-            if event.session_id:
-                await self.redis_client.publish(
-                    f"frontend:session:{event.session_id}",
-                    event_json
-                )
+            # Also notify local subscribers
+            await self._notify_subscribers(event)
             
-            logger.debug(f"Published event {event.event_type} to frontend:events")
+            logger.debug(f"Published event {event.event_type} to {channel}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to publish event {event.event_type}: {e}")
+            return False
+    
+    async def subscribe(self, event_type: str, subscriber: EventSubscriber, session_id: str = None) -> bool:
+        """
+        Subscribe to events of a specific type.
+        
+        Args:
+            event_type: Type of event to subscribe to.
+            subscriber: The subscriber callback.
+            session_id: Optional session ID to subscribe to.
+            
+        Returns:
+            bool: True if subscribed successfully.
+        """
+        try:
+            key = f"{event_type}:{session_id}" if session_id else event_type
+            if key not in self.subscribers:
+                self.subscribers[key] = []
+            self.subscribers[key].append(subscriber)
+            
+            logger.debug(f"Subscribed {subscriber} to {event_type}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to subscribe to {event_type}: {e}")
+            return False
+    
+    async def unsubscribe(self, event_type: str, subscriber: EventSubscriber, session_id: str = None) -> bool:
+        """
+        Unsubscribe from events of a specific type.
+        
+        Args:
+            event_type: Type of event to unsubscribe from.
+            subscriber: The subscriber callback.
+            session_id: Optional session ID to unsubscribe from.
+            
+        Returns:
+            bool: True if unsubscribed successfully.
+        """
+        try:
+            key = f"{event_type}:{session_id}" if session_id else event_type
+            if key in self.subscribers and subscriber in self.subscribers[key]:
+                self.subscribers[key].remove(subscriber)
+                logger.debug(f"Unsubscribed {subscriber} from {event_type}")
+                return True
+            return False
             
         except Exception as e:
-            logger.error(f"Error publishing event {event.event_type}: {e}")
-            raise
+            logger.error(f"Failed to unsubscribe from {event_type}: {e}")
+            return False
     
     async def subscribe_to_events(self, session_id: str):
         """
@@ -75,174 +120,112 @@ class FrontendEventBus(EventBus):
             FrontendEvent: Events for the session.
         """
         try:
-            # Mark this session as actively subscribed
-            self._active_subscriptions[session_id] = True
+            # Subscribe to session-specific events
+            pubsub = await self.redis_client._get_client().pubsub()
+            await pubsub.subscribe(f"frontend_events:{session_id}")
+            await pubsub.subscribe("frontend_events:global")
             
-            # Create pubsub connection
-            self.pubsub = self.redis_client.pubsub()
-            
-            # Subscribe to general events and session-specific events
-            await self.pubsub.subscribe("frontend:events")
-            await self.pubsub.subscribe(f"frontend:session:{session_id}")
-            
-            logger.info(f"Subscribed to events for session {session_id}")
-            
-            # Listen for messages
-            async for message in self.pubsub.listen():
-                if not self._active_subscriptions.get(session_id, False):
-                    # Session unsubscribed, break the loop
-                    break
-                
-                if message["type"] == "message":
-                    try:
-                        # Parse event from JSON
-                        event_data = json.loads(message["data"])
-                        event = FrontendEvent.parse_obj(event_data)
+            while True:
+                try:
+                    message = await pubsub.get_message(timeout=1.0)
+                    if message and message['type'] == 'message':
+                        event_data = json.loads(message['data'])
+                        event = FrontendEvent.model_validate(event_data)
                         
-                        # Filter events based on session permissions
-                        if self._should_receive_event(event, session_id):
+                        # Filter events for this session
+                        if event.session_id is None or event.session_id == session_id:
                             yield event
                             
-                    except Exception as e:
-                        logger.error(f"Error parsing event message: {e}")
-                        continue
-                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing Redis message: {e}")
+                    
         except Exception as e:
             logger.error(f"Error in event subscription for session {session_id}: {e}")
-            raise
         finally:
-            # Clean up subscription
-            await self._cleanup_subscription(session_id)
-    
-    async def unsubscribe_from_events(self, session_id: str) -> bool:
+            if pubsub:
+                await pubsub.close()
+
+    async def _notify_subscribers(self, event: FrontendEvent):
         """
-        Unsubscribe from events for a session.
+        Notify all subscribers of an event.
         
         Args:
-            session_id: Session ID to unsubscribe.
-            
-        Returns:
-            bool: True if unsubscribed successfully.
+            event: The event to notify about.
         """
         try:
-            # Mark session as unsubscribed
-            self._active_subscriptions[session_id] = False
+            # Notify global subscribers
+            if event.event_type in self.subscribers:
+                for subscriber in self.subscribers[event.event_type]:
+                    try:
+                        await subscriber(event)
+                    except Exception as e:
+                        logger.error(f"Subscriber error for {event.event_type}: {e}")
             
-            # Unsubscribe from Redis channels
-            if self.pubsub:
-                await self.pubsub.unsubscribe("frontend:events")
-                await self.pubsub.unsubscribe(f"frontend:session:{session_id}")
-            
-            logger.info(f"Unsubscribed from events for session {session_id}")
-            return True
-            
+            # Notify session-specific subscribers
+            session_key = f"{event.event_type}:{event.session_id}"
+            if session_key in self.subscribers:
+                for subscriber in self.subscribers[session_key]:
+                    try:
+                        await subscriber(event)
+                    except Exception as e:
+                        logger.error(f"Session subscriber error for {event.event_type}: {e}")
+                        
         except Exception as e:
-            logger.error(f"Error unsubscribing session {session_id}: {e}")
-            return False
+            logger.error(f"Error notifying subscribers: {e}")
     
-    async def publish_system_event(self, event_type: str, data: Dict[str, Any], source: str = "system"):
+    async def start(self):
         """
-        Publish system-wide event.
-        
-        Args:
-            event_type: Type of event.
-            data: Event data.
-            source: Source of the event.
+        Start the event bus and begin listening for Redis events.
         """
-        event = FrontendEvent(
-            event_type=event_type,
-            timestamp=datetime.now(timezone.utc),
-            data=data,
-            source=source
-        )
+        if self._running:
+            return
         
-        await self.publish_event(event)
+        self._running = True
+        self._task = asyncio.create_task(self._listen_for_events())
+        logger.info("Frontend event bus started")
     
-    async def publish_session_event(
-        self,
-        session_id: str,
-        event_type: str,
-        data: Dict[str, Any],
-        source: str = "system"
-    ):
+    async def stop(self):
         """
-        Publish event to a specific session.
-        
-        Args:
-            session_id: Target session ID.
-            event_type: Type of event.
-            data: Event data.
-            source: Source of the event.
+        Stop the event bus.
         """
-        event = FrontendEvent(
-            event_type=event_type,
-            timestamp=datetime.now(timezone.utc),
-            data=data,
-            source=source,
-            session_id=session_id
-        )
+        if not self._running:
+            return
         
-        await self.publish_event(event)
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Frontend event bus stopped")
     
-    def _should_receive_event(self, event: FrontendEvent, session_id: str) -> bool:
+    async def _listen_for_events(self):
         """
-        Determine if a session should receive a specific event.
-        
-        Args:
-            event: Event to check.
-            session_id: Session ID to check for.
-            
-        Returns:
-            bool: True if session should receive the event.
-        """
-        # If event has a specific session_id, only that session should receive it
-        if event.session_id and event.session_id != session_id:
-            return False
-        
-        # TODO: Implement more sophisticated permission-based filtering
-        # For now, all sessions receive all events
-        
-        return True
-    
-    async def _cleanup_subscription(self, session_id: str):
-        """
-        Clean up subscription resources.
-        
-        Args:
-            session_id: Session ID to clean up.
+        Listen for events from Redis and forward to local subscribers.
         """
         try:
-            # Remove from active subscriptions
-            self._active_subscriptions.pop(session_id, None)
+            # Subscribe to global events
+            pubsub = await self.redis_client._get_client().pubsub()
+            await pubsub.subscribe("frontend_events:global")
             
-            # Close pubsub connection if no active subscriptions
-            if not self._active_subscriptions and self.pubsub:
-                await self.pubsub.close()
-                self.pubsub = None
-                
+            while self._running:
+                try:
+                    message = await pubsub.get_message(timeout=1.0)
+                    if message and message['type'] == 'message':
+                        event_data = json.loads(message['data'])
+                        event = FrontendEvent.model_validate(event_data)
+                        await self._notify_subscribers(event)
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing Redis message: {e}")
+                    
         except Exception as e:
-            logger.error(f"Error cleaning up subscription for session {session_id}: {e}")
-    
-    async def get_active_subscriptions(self) -> Dict[str, bool]:
-        """
-        Get currently active subscriptions.
-        
-        Returns:
-            Dict[str, bool]: Dictionary of session IDs and their subscription status.
-        """
-        return self._active_subscriptions.copy()
-    
-    async def health_check(self) -> bool:
-        """
-        Check if the event bus is healthy.
-        
-        Returns:
-            bool: True if healthy, False otherwise.
-        """
-        try:
-            # Test Redis connection
-            await self.redis_client.ping()
-            return True
-        except Exception as e:
-            logger.error(f"Event bus health check failed: {e}")
-            return False 
+            logger.error(f"Error in event listener: {e}")
+        finally:
+            if pubsub:
+                await pubsub.close() 
