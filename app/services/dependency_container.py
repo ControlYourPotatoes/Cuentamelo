@@ -313,16 +313,16 @@ class DependencyContainer:
         """Get the command handler service"""
         if "command_handler" not in self._services:
 
-            frontend_service = self.get_frontend_service()
+            ai_provider = self.get_ai_provider()
+            news_provider = self.get_news_provider()
+            twitter_provider = self.get_twitter_provider()
             orchestration_service = self.get_orchestration_service()
-            event_bus = self.get_frontend_event_bus()
-            session_manager = self.get_user_session_manager()
 
             self._services["command_handler"] = CommandHandler(
-                frontend_service=frontend_service,
-                orchestration_service=orchestration_service,
-                event_bus=event_bus,
-                session_manager=session_manager
+                ai_provider=ai_provider,
+                news_provider=news_provider,
+                twitter_provider=twitter_provider,
+                orchestration_service=orchestration_service
             )
 
             logger.info("Created command handler service")
