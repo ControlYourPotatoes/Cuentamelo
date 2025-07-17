@@ -1,4 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.api import health, news, demo, webhooks, dashboard, frontend, command_api
 from app.services.demo_orchestrator import demo_orchestrator
@@ -9,6 +10,9 @@ app = FastAPI(
     description="LangGraph-powered AI character orchestration for social media",
     version="1.0.0"
 )
+
+# Mount static files for dashboard
+app.mount("/dashboard", StaticFiles(directory="dashboard", html=True), name="dashboard")
 
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["health"])
