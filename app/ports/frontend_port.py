@@ -6,7 +6,7 @@ following the Ports & Adapters pattern used throughout the project.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable, Awaitable
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -67,6 +67,9 @@ class FrontendEvent(BaseModel):
     data: Dict[str, Any]
     source: str
     session_id: Optional[str] = None
+
+# Type alias for event bus subscribers
+EventSubscriber = Callable[[FrontendEvent], Awaitable[None]]
 
 
 class ScenarioCreate(BaseModel):
