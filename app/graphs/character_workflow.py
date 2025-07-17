@@ -518,6 +518,8 @@ def route_after_validation(state: CharacterWorkflowState) -> str:
             state["retry_count"] = retry_count + 1
             return "invalid"
         else:
+            # After max retries, mark as error and continue
+            agent_state.error_message = "Max retries exceeded for response generation"
             return "error"
 
 
