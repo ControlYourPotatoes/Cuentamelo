@@ -64,28 +64,9 @@ services:
     networks:
       - cuentamelo_network
 
-  # Streamlit Dashboard (Optional)
-  dashboard:
-    build: .
-    container_name: cuentamelo_dashboard
-    ports:
-      - "8501:8501"
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/cuentamelo
-      - REDIS_URL=redis://:cuentamelo_redis@redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - /app/venv # Exclude venv from volume mount
-    working_dir: /app
-    command: streamlit run dashboard/main.py --server.port=8501 --server.address=0.0.0.0
-    restart: unless-stopped
-    networks:
-      - cuentamelo_network
+  # Static Dashboard (served by FastAPI app at /dashboard)
+  # The dashboard is now served as static files by the main FastAPI app
+  # Access it at: http://localhost:8000/dashboard/
 
 volumes:
   postgres_data:
