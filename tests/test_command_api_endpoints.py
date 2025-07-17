@@ -9,6 +9,8 @@ import pytest
 import json
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
+import asyncio
+from httpx import AsyncClient
 
 from app.main import app
 from app.ports.command_broker_port import CommandRequest, CommandResponse, CommandStatus, CommandType
@@ -126,33 +128,40 @@ class TestCommandAPIEndpoints:
         data = response.json()
         assert "success" in data
     
-    def test_get_command_history_success(self):
+    @pytest.mark.asyncio
+    async def test_get_command_history_success(self):
         """Should successfully get command history."""
-        # Submit a few commands first
-        for i in range(3):
-            command_request = {
-                "command_type": "news_injection",
-                "command_id": f"test_cmd_history_{i:03d}",
-                "session_id": "test_session_history",
-                "parameters": {
-                    "news": {
-                        "title": f"History Test News {i}",
-                        "content": f"Test content {i}",
-                        "source": "Test Source",
-                        "category": "test"
-                    }
-                },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "source": "api"
-            }
-            client.post("/api/commands/submit", json=command_request)
-        
-        # Get history
-        response = client.get("/api/commands/history/test_session_history")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 3
+        # Use TestClient but with proper async handling
+        with TestClient(app) as client:
+            # Submit a few commands first
+            for i in range(3):
+                command_request = {
+                    "command_type": "news_injection",
+                    "command_id": f"test_cmd_history_{i:03d}",
+                    "session_id": "test_session_history",
+                    "parameters": {
+                        "news": {
+                            "title": f"History Test News {i}",
+                            "content": f"Test content {i}",
+                            "source": "Test Source",
+                            "category": "test"
+                        }
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "source": "api"
+                }
+                resp = client.post("/api/commands/submit", json=command_request)
+                assert resp.status_code == 200
+
+            # Give a short delay to ensure all async tasks complete
+            await asyncio.sleep(0.2)
+
+            # Get history
+            response = client.get("/api/commands/history/test_session_history")
+            assert response.status_code == 200
+            data = response.json()
+            assert isinstance(data, list)
+            assert len(data) >= 3
     
     def test_get_command_history_with_limit(self):
         """Should get command history with custom limit."""
