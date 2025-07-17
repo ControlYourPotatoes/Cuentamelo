@@ -1,8 +1,11 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional
 import uuid
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", extra="ignore")  # Ignore extra environment variables
+    
     app_name: str = "Cuentamelo"
     debug: bool = True
     log_level: str = "INFO"
@@ -31,10 +34,6 @@ class Settings(BaseSettings):
     DEMO_SESSION_ID: str = str(uuid.uuid4())
     N8N_WEBHOOK_TIMEOUT: int = 5
     DEMO_SPEED_MULTIPLIER: float = 1.0
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"  # Ignore extra environment variables
 
 
 def get_settings():
