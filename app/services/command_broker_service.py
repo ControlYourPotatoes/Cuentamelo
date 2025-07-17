@@ -39,7 +39,7 @@ class CommandBrokerService(CommandBrokerPort):
         await self.redis_client.set(
             f"command:{command.command_id}",
             command.json(),
-            expire=3600  # 1 hour
+            ttl=3600  # 1 hour
         )
         
         # Add to active commands
@@ -65,7 +65,7 @@ class CommandBrokerService(CommandBrokerPort):
         await self.redis_client.set(
             f"command_response:{command.command_id}",
             response.json(),
-            expire=3600  # 1 hour
+            ttl=3600  # 1 hour
         )
         
         # Remove from active commands
@@ -142,26 +142,32 @@ class CommandBrokerService(CommandBrokerPort):
         return False
     
     async def get_command_history(self, session_id: str, limit: int = 50) -> List[CommandResponse]:
-        """Get command history for a session"""
         logger.debug(f"Getting command history for session {session_id}, limit {limit}")
-        
-        # TODO: Implement command history retrieval from Redis
-        # This would require storing command history in a more structured way
-        # For now, return empty list as placeholder
-        
-        # Implementation would look something like:
-        # history_keys = await self.redis_client.keys(f"command_history:{session_id}:*")
-        # history_keys = sorted(history_keys, reverse=True)[:limit]
-        # 
-        # responses = []
-        # for key in history_keys:
-        #     response_data = await self.redis_client.get(key)
-        #     if response_data:
-        #         responses.append(CommandResponse.parse_raw(response_data))
-        # 
-        # return responses
-        
-        return []
+        try:
+            # Properly await the Redis client and keys method
+            client = await self.redis_client._get_client()
+            all_keys = await client.keys("command_response:*")
+            responses = []
+            for key in all_keys:
+                key_str = key.decode('utf-8') if isinstance(key, bytes) else key
+                response_data = await self.redis_client.get(key_str)
+                if response_data:
+                    try:
+                        response = CommandResponse.parse_raw(response_data)
+                        command_id = key_str.replace("command_response:", "")
+                        command_data = await self.redis_client.get(f"command:{command_id}")
+                        if command_data:
+                            command = CommandRequest.parse_raw(command_data)
+                            if command.session_id == session_id:
+                                responses.append(response)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse command response from {key_str}: {e}")
+                        continue
+            responses.sort(key=lambda x: x.timestamp, reverse=True)
+            return responses[:limit]
+        except Exception as e:
+            logger.error(f"Error retrieving command history for session {session_id}: {e}")
+            return []
     
     async def get_active_commands(self) -> List[CommandRequest]:
         """Get list of currently active commands"""

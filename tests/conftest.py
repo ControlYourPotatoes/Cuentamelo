@@ -3,11 +3,22 @@ Pytest configuration and shared fixtures for Cuentamelo test suite.
 """
 import pytest
 import asyncio
+import os
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
 from app.models.conversation import NewsItem, ThreadEngagementState
 from app.models.personality import create_jovani_vazquez_personality
+
+
+# Ensure tests use the correct Redis configuration with authentication
+@pytest.fixture(autouse=True)
+def setup_test_environment():
+    """Set up test environment with correct Redis configuration."""
+    # Ensure Redis URL includes authentication for tests
+    if not os.getenv("REDIS_URL"):
+        os.environ["REDIS_URL"] = "redis://:cuentamelo_redis@localhost:6379/0"
+    yield
 
 
 class NewsItemBuilder:
@@ -177,6 +188,13 @@ def mock_redis_client():
     redis.publish = AsyncMock()
     redis.subscribe = AsyncMock()
     return redis
+
+
+@pytest.fixture
+def real_redis_client():
+    """Real Redis client for integration tests."""
+    from app.services.redis_client import RedisClient
+    return RedisClient()
 
 
 @pytest.fixture
