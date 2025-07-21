@@ -52,7 +52,12 @@ class TestConfigDrivenPersonalityIntegration:
                 "avoided": ["heavy politics", "controversial religious topics"]
             },
             "language": {
-                "signature_phrases": ["¡Ay, pero esto está buenísimo!", "Real talk", "Wepa!"],
+                "signature_phrases": [
+                    {"text": "¡Ay, pero esto está buenísimo!", "frequency": "common"},
+                    {"text": "Real talk", "frequency": "common"},
+                    {"text": "Wepa!", "frequency": "common"},
+                    {"text": "OVNI Coming Soon", "frequency": "rare"}
+                ],
                 "common_expressions": ["que lo que", "pa", "tremendo"],
                 "emoji_preferences": ["🔥", "💯", "😂", "🇵🇷"],
                 "patterns": {
@@ -236,6 +241,28 @@ class TestConfigDrivenPersonalityIntegration:
             
             should_not_engage = personality.should_engage_in_controversy("heavy politics debate")
             assert should_not_engage == False
+    
+    def test_signature_phrase_frequency(self):
+        """Test that signature phrases are selected according to frequency."""
+        with patch.object(self.loader, 'load_personality', return_value=self.test_config):
+            personality = JovaniVazquezPersonality(config_loader=self.loader)
+            base_context = "Test context"
+            phrase_counts = {}
+            for _ in range(100):
+                enhanced_context = personality.get_character_context(base_context)
+                import re
+                match = re.search(r"Start with your signature: '([^']+)'", enhanced_context)
+                if match:
+                    phrase = match.group(1)
+                    phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+            common_phrases = [p["text"] for p in self.test_config["language"]["signature_phrases"] if p.get("frequency", "rare") == "common"]
+            rare_phrases = [p["text"] for p in self.test_config["language"]["signature_phrases"] if p.get("frequency", "rare") == "rare"]
+            assert any(phrase in phrase_counts for phrase in common_phrases)
+            if rare_phrases:
+                assert any(phrase in phrase_counts for phrase in rare_phrases)
+                common_total = sum(phrase_counts.get(p, 0) for p in common_phrases)
+                rare_total = sum(phrase_counts.get(p, 0) for p in rare_phrases)
+                assert common_total > rare_total
     
     def test_backward_compatibility(self):
         """Test that the system maintains backward compatibility."""
