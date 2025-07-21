@@ -77,7 +77,7 @@ class TestRunner:
         
         cmd = [
             "python", "-m", "pytest",
-            str(self.tests_dir),
+            str(self.tests_dir / "unit"),
             "-v",
             "--tb=short",
             "--strict-markers",
@@ -166,10 +166,10 @@ class TestRunner:
         dependencies = self._check_dependencies()
         
         infrastructure_tests = [
-            "test_command_broker_service.py",
-            "test_n8n_frontend_service.py", 
-            "test_frontend_event_bus.py",
-            "test_dependency_container_revamp.py"
+            "unit/services/test_command_broker_service.py",
+            "unit/services/test_n8n_frontend_service.py", 
+            "unit/services/test_frontend_event_bus.py",
+            "unit/services/test_dependency_container.py"
         ]
         
         cmd = [
@@ -219,7 +219,9 @@ class TestRunner:
         
         cmd = [
             "python", "-m", "pytest",
-            str(self.tests_dir),
+            str(self.tests_dir / "unit"),
+            str(self.tests_dir / "integration"),
+            str(self.tests_dir / "api"),
             "-v",
             "--tb=short",
             "--strict-markers",

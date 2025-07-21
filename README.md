@@ -13,8 +13,8 @@ A sophisticated AI agent orchestration platform using LangGraph that creates and
 - **🔄 Full Orchestration**: Complete end-to-end workflow from news to social media
 
 # Video Description
-https://www.loom.com/share/94af3be4fc5b402099c42847f51298f4
 
+https://www.loom.com/share/94af3be4fc5b402099c42847f51298f4
 
 ## 🚀 **Quick Start - Run the Demo**
 
@@ -111,7 +111,6 @@ python scripts/demo_full_orchestration.py --interactive
 - **Language**: Casual Puerto Rican Spanish
 - **Signature**: "Esto del tráfico es un relajo"
 - **Topics**: Economy, transportation, daily life
-
 
 ## 🏗️ **Architecture**
 
@@ -305,3 +304,17 @@ Perfect for showcasing technical skills while building something culturally mean
 ---
 
 **Built with ❤️ for Puerto Rico** 🇵🇷
+
+## Signature Phrases: Optionality & Frequency
+
+- Personality configs now support a `signature_phrases` field as an array of objects:
+  ```json
+  "signature_phrases": [
+    {"text": "¡Vamos Vaqueros!", "frequency": "common"},
+    {"text": "Pa'lante siempre, broki.", "frequency": "rare"}
+  ]
+  ```
+- `frequency` can be `common` or `rare` (optional, defaults to `rare`).
+- Agent logic uses signature phrases according to their frequency: "common" phrases are used more often, "rare" only occasionally.
+- For details and rationale, see [context/SIGNATURE_PHRASES_OPTIONAL_AND_FREQUENCY.md](context/SIGNATURE_PHRASES_OPTIONAL_AND_FREQUENCY.md).
+- Contributors: Please follow this structure for any new or updated personalities.

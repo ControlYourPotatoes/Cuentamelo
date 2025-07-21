@@ -168,10 +168,32 @@ class PersonalityConfigLoader:
         try:
             jsonschema.validate(instance=config, schema=schema)
             logger.debug("Configuration validation passed")
-            return True
         except ValidationError as e:
             logger.error(f"Configuration validation failed: {e}")
             return False
+        # Additional validation for signature_phrases
+        language = config.get("language", {})
+        sig_phrases = language.get("signature_phrases")
+        char_type = config.get("character_type", "")
+        if sig_phrases is not None:
+            if not isinstance(sig_phrases, list):
+                logger.error("signature_phrases must be a list if present.")
+                return False
+            for idx, phrase in enumerate(sig_phrases):
+                if not isinstance(phrase, dict):
+                    logger.error(f"signature_phrases[{idx}] must be an object.")
+                    return False
+                if "text" not in phrase or not isinstance(phrase["text"], str):
+                    logger.error(f"signature_phrases[{idx}] must have a 'text' field of type string.")
+                    return False
+                freq = phrase.get("frequency")
+                if freq is not None and freq not in ("common", "rare"):
+                    logger.error(f"signature_phrases[{idx}] has invalid frequency: {freq}")
+                    return False
+        # Warn if influencer/entertainer omits signature_phrases
+        if char_type in ("influencer", "entertainer") and (not sig_phrases or len(sig_phrases) == 0):
+            logger.warning(f"Influencer/entertainer '{config.get('character_id','')}' has no signature_phrases.")
+        return True
     
     def get_available_characters(self) -> List[str]:
         """

@@ -20,27 +20,31 @@ def run_tests(test_type="all", verbose=False, coverage=False):
     
     # Select test type
     if test_type == "unit":
-        cmd.extend(["tests/test_models", "tests/test_agents", "tests/test_graphs"])
+        cmd.extend(["tests/unit/models", "tests/unit/agents", "tests/unit/graphs", "tests/unit/services", "tests/unit/tools"])
     elif test_type == "integration":
         cmd.extend(["tests/integration"])
     elif test_type == "models":
-        cmd.extend(["tests/test_models"])
+        cmd.extend(["tests/unit/models"])
     elif test_type == "agents":
-        cmd.extend(["tests/test_agents"])
+        cmd.extend(["tests/unit/agents"])
     elif test_type == "graphs":
-        cmd.extend(["tests/test_graphs"])
+        cmd.extend(["tests/unit/graphs"])
+    elif test_type == "services":
+        cmd.extend(["tests/unit/services"])
+    elif test_type == "tools":
+        cmd.extend(["tests/unit/tools"])
     elif test_type == "personality":
-        cmd.extend(["tests/test_models/test_personality.py"])
+        cmd.extend(["tests/unit/models/test_personality.py"])
     elif test_type == "thread":
-        cmd.extend(["tests/test_models/test_thread_engagement.py"])
+        cmd.extend(["tests/unit/models/test_thread_engagement.py"])
     elif test_type == "news":
-        cmd.extend(["tests/test_models/test_news_processing.py"])
+        cmd.extend(["tests/unit/models/test_news_processing.py"])
     elif test_type == "character":
-        cmd.extend(["tests/test_agents/test_character_agents.py"])
+        cmd.extend(["tests/unit/agents/test_character_agents.py"])
     elif test_type == "workflow":
-        cmd.extend(["tests/test_graphs/test_character_workflow.py"])
+        cmd.extend(["tests/unit/graphs/test_character_workflow.py"])
     elif test_type == "orchestrator":
-        cmd.extend(["tests/test_graphs/test_orchestrator.py"])
+        cmd.extend(["tests/unit/graphs/test_orchestrator.py"])
     elif test_type == "integration":
         cmd.extend(["tests/integration/test_langgraph_integration.py"])
     else:

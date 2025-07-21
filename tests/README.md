@@ -10,109 +10,63 @@ The test suite is organized into logical categories that mirror the application 
 tests/
 ├── conftest.py                          # Shared fixtures and test configuration
 ├── run_tests.py                         # Test runner script
-├── README.md                           # This file
-├── test_models/                        # Model tests
-│   ├── test_personality.py             # Personality system tests
-│   ├── test_thread_engagement.py       # Thread engagement state tests
-│   └── test_news_processing.py         # News processing tests
-├── test_agents/                        # Agent tests
-│   └── test_character_agents.py        # Character agent tests
-├── test_graphs/                        # Graph/workflow tests
-│   ├── test_character_workflow.py      # Character workflow tests
-│   └── test_orchestrator.py            # Orchestration tests
-├── integration/                        # Integration tests
-│   └── test_langgraph_integration.py   # System integration tests
-└── [existing test files]               # Legacy test files
+├── run_tests_revamp.py                  # Advanced test runner
+├── README.md                            # This file
+├── api/                                 # API endpoint tests
+│   ├── test_command_api_endpoints.py
+│   ├── test_news_api_endpoints.py
+│   ├── test_frontend_api_endpoints.py
+│   └── test_api_endpoints.py
+├── infrastructure/                      # Infrastructure/configuration tests
+│   ├── test_config.py
+│   └── test_configurable_personality.py
+├── integration/                         # Integration tests
+│   ├── test_command_flow_integration.py
+│   ├── test_langgraph_integration.py
+│   ├── test_real_integration.py
+│   └── test_config_driven_personality.py
+├── unit/                                # Unit tests (fast, isolated)
+│   ├── models/                          # Data model tests
+│   │   ├── test_personality.py
+│   │   ├── test_thread_engagement.py
+│   │   └── test_news_processing.py
+│   ├── agents/                          # Agent tests
+│   │   └── test_character_agents.py
+│   ├── graphs/                          # Workflow/Graph tests
+│   │   ├── test_character_workflow.py
+│   │   └── test_orchestrator.py
+│   ├── services/                        # Service layer tests
+│   │   ├── test_command_broker_service.py
+│   │   ├── test_frontend_event_bus.py
+│   │   ├── test_n8n_frontend_service.py
+│   │   ├── test_dependency_container.py
+│   │   ├── test_database_service.py
+│   │   └── test_personality_config_loader.py
+│   └── tools/                           # Tool tests
+│       └── [tool test files]
 ```
 
 ## Test Categories
 
-### Unit Tests (`test_models/`, `test_agents/`, `test_graphs/`)
+### Unit Tests (`unit/`)
 
-**Personality System Tests** (`test_personality.py`)
-
-- Personality data creation and validation
-- Character type differentiation
-- Tone preferences and topic weights
-- Personality consistency validation
-
-**Thread Engagement Tests** (`test_thread_engagement.py`)
-
-- Thread state creation and management
-- Character reply tracking and rate limiting
-- Thread context generation
-- Multi-character conversation handling
-
-**News Processing Tests** (`test_news_processing.py`)
-
-- News item creation and validation
-- Topic categorization and relevance scoring
-- Source handling and timestamp management
-- News item builder pattern usage
-
-**Character Agent Tests** (`test_character_agents.py`)
-
-- Agent creation and configuration
-- Engagement probability calculations
-- Topic relevance assessment
-- AI provider integration
-- Response generation with dependency injection
-
-**Character Workflow Tests** (`test_character_workflow.py`)
-
-- New thread workflow execution
-- Thread reply workflow handling
-- Context generation and management
-- Error handling and edge cases
-- Rate limiting integration
-
-**Orchestration Tests** (`test_orchestrator.py`)
-
-- Orchestration state management
-- News processing cycles
-- Character reaction generation
-- State persistence and recovery
-- Multi-character coordination
+- `unit/models/`: Data model tests
+- `unit/agents/`: Agent tests
+- `unit/graphs/`: Workflow/graph tests
+- `unit/services/`: Service layer tests
+- `unit/tools/`: Tool tests
 
 ### Integration Tests (`integration/`)
 
-**LangGraph System Integration** (`test_langgraph_integration.py`)
+- Component and workflow integration
 
-- End-to-end news discovery and engagement flow
-- Character workflow integration with orchestration
-- Thread engagement system integration
-- Personality data integration throughout the system
-- Realistic news discovery sequences
-- Thread-based conversation flows
-- System error handling and recovery
-- Performance and scalability testing
+### API Tests (`api/`)
 
-## Test Design Principles
+- HTTP endpoint and contract tests
 
-### Test-Driven Design
+### Infrastructure Tests (`infrastructure/`)
 
-- Tests serve as executable specifications
-- Tests document expected behavior
-- Tests catch regressions and validate changes
-
-### Builder Pattern
-
-- `NewsItemBuilder` for creating test news items
-- `ThreadEngagementStateBuilder` for creating thread states
-- Fluent interface for easy test data construction
-
-### Dependency Injection
-
-- Mock AI providers for isolated testing
-- Configurable character agents
-- Testable component boundaries
-
-### Comprehensive Coverage
-
-- Happy path scenarios
-- Error conditions and edge cases
-- Boundary value testing
-- Performance and scalability validation
+- Configuration and infrastructure validation
 
 ## Running Tests
 
@@ -128,6 +82,8 @@ python tests/run_tests.py integration
 python tests/run_tests.py models
 python tests/run_tests.py agents
 python tests/run_tests.py graphs
+python tests/run_tests.py services
+python tests/run_tests.py tools
 
 # Run specific test files
 python tests/run_tests.py personality
@@ -151,8 +107,10 @@ python tests/run_tests.py all -c
 pytest
 
 # Run specific test files
-pytest tests/test_models/test_personality.py
+pytest tests/unit/models/test_personality.py
 pytest tests/integration/test_langgraph_integration.py
+pytest tests/api/test_api_endpoints.py
+pytest tests/unit/services/test_command_broker_service.py
 
 # Run with verbose output
 pytest -v
@@ -161,10 +119,10 @@ pytest -v
 pytest --cov=app --cov-report=html
 
 # Run specific test classes
-pytest tests/test_models/test_personality.py::TestPersonalityDataSystem
+pytest tests/unit/models/test_personality.py::TestPersonalityDataSystem
 
 # Run specific test methods
-pytest tests/test_models/test_personality.py::TestPersonalityDataSystem::test_jovani_vazquez_personality_creation
+pytest tests/unit/models/test_personality.py::TestPersonalityDataSystem::test_jovani_vazquez_personality_creation
 ```
 
 ### Using pytest Markers
@@ -176,8 +134,14 @@ pytest -m unit
 # Run only integration tests
 pytest -m integration
 
-# Run only async tests
-pytest -m asyncio
+# Run only API tests
+pytest -m api
+
+# Run only infrastructure tests
+pytest -m infrastructure
+
+# Run async tests
+pytest -m async
 
 # Run slow tests
 pytest -m slow
@@ -335,5 +299,5 @@ pytest -v -s --tb=long
 Run tests in isolation to identify issues:
 
 ```bash
-pytest tests/test_models/test_personality.py -v
+pytest tests/unit/models/test_personality.py -v
 ```
