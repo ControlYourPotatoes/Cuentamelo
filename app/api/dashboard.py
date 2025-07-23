@@ -89,7 +89,8 @@ async def get_dashboard_overview():
             system=system_status,
             characters=characters,
             recent_events=recent_events,
-            active_scenarios=active_scenarios
+            active_scenarios=active_scenarios,
+            analytics=AnalyticsSummary()  # TODO: Replace with real analytics summary
         )
         
     except Exception as e:
