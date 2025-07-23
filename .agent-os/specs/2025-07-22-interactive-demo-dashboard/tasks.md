@@ -7,16 +7,16 @@ These are the tasks to be completed for the spec detailed in @.agent-os/specs/20
 
 ## Tasks
 
-- [ ] 1. **Backend API Development**
+- [x] 1. **Backend API Development**
 
   - [x] 1.1 Write tests for CharacterAnalysisController endpoints
-  - [ ] 1.2 Implement GET /api/characters endpoint with character metadata
-  - [ ] 1.3 Implement GET /api/scenarios endpoint with demo scenario listing
-  - [ ] 1.4 Implement POST /api/analyze-engagement endpoint for character analysis
-  - [ ] 1.5 Implement GET /api/analyze-stream/{session_id} for SSE real-time updates
-  - [ ] 1.6 Implement POST /api/custom-news endpoint for user-provided content
-  - [ ] 1.7 Add API endpoints to FastAPI app routing
-  - [ ] 1.8 Verify all backend tests pass
+  - [x] 1.2 Implement GET /api/characters endpoint with character metadata
+  - [x] 1.3 Implement GET /api/scenarios endpoint with demo scenario listing
+  - [x] 1.4 Implement POST /api/analyze-engagement endpoint for character analysis
+  - [x] 1.5 Implement GET /api/analyze-stream/{session_id} for SSE real-time updates
+  - [x] 1.6 Implement POST /api/custom-news endpoint for user-provided content
+  - [x] 1.7 Add API endpoints to FastAPI app routing
+  - [x] 1.8 Verify all backend tests pass
 
 - [ ] 2. **Interactive HTML Dashboard**
 
