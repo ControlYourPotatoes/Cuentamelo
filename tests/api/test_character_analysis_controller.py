@@ -160,7 +160,7 @@ class TestCharacterAnalysisController:
         """Should successfully return list of available characters."""
         # Setup
         mock_container = MagicMock()
-        mock_container.get_personality_loader.return_value = mock_personality_loader
+        mock_container.get_personality_config_loader.return_value = mock_personality_loader
         mock_get_container.return_value = mock_container
         
         # Execute
@@ -191,7 +191,7 @@ class TestCharacterAnalysisController:
         """Should return characters with detailed information when include_details=true."""
         # Setup
         mock_container = MagicMock()
-        mock_container.get_personality_loader.return_value = mock_personality_loader
+        mock_container.get_personality_config_loader.return_value = mock_personality_loader
         mock_get_container.return_value = mock_container
         
         # Execute
@@ -214,7 +214,7 @@ class TestCharacterAnalysisController:
         # Setup
         mock_container = MagicMock()
         mock_personality_loader.load_all_personalities.side_effect = Exception("Database error")
-        mock_container.get_personality_loader.return_value = mock_personality_loader
+        mock_container.get_personality_config_loader.return_value = mock_personality_loader
         mock_get_container.return_value = mock_container
         
         # Execute
@@ -299,6 +299,12 @@ class TestCharacterAnalysisController:
         mock_container = MagicMock()
         mock_character_analysis_service.analyze_engagement.return_value = sample_engagement_analysis
         mock_container.get_character_analysis_service.return_value = mock_character_analysis_service
+        
+        # Mock personality loader
+        mock_personality_loader = MagicMock()
+        mock_personality_loader.get_available_characters.return_value = ["jovani_vazquez", "ciudadano_bayamon"]
+        mock_container.get_personality_config_loader.return_value = mock_personality_loader
+        
         mock_get_container.return_value = mock_container
         
         request_data = {
@@ -653,7 +659,7 @@ class TestCharacterAnalysisEdgeCases:
         # Setup
         mock_container = MagicMock()
         mock_personality_loader.load_all_personalities.return_value = {}
-        mock_container.get_personality_loader.return_value = mock_personality_loader
+        mock_container.get_personality_config_loader.return_value = mock_personality_loader
         mock_get_container.return_value = mock_container
         
         # Execute
