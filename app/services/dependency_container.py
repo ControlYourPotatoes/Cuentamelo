@@ -27,6 +27,8 @@ from app.services.n8n_frontend_service import N8NFrontendService
 from app.services.frontend_event_bus import FrontendEventBus
 from app.services.command_broker_service import CommandBrokerService
 from app.services.command_handler import CommandHandler
+from app.services.character_analysis_service import CharacterAnalysisService
+from app.services.news_scenario_service import NewsScenarioService
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -388,6 +390,32 @@ class DependencyContainer:
         This service provides access to personality configurations from JSON files.
         """
         return self.personality_config_loader
+    
+    @lru_cache(maxsize=1)
+    def get_character_analysis_service(self) -> CharacterAnalysisService:
+        """
+        Get the character analysis service.
+        
+        This service provides character engagement analysis functionality.
+        """
+        if "character_analysis_service" not in self._services:
+            self._services["character_analysis_service"] = CharacterAnalysisService()
+            logger.info("Created character analysis service")
+        
+        return self._services["character_analysis_service"]
+    
+    @lru_cache(maxsize=1)
+    def get_news_scenario_service(self) -> NewsScenarioService:
+        """
+        Get the news scenario service.
+        
+        This service provides news scenario management and custom news processing.
+        """
+        if "news_scenario_service" not in self._services:
+            self._services["news_scenario_service"] = NewsScenarioService()
+            logger.info("Created news scenario service")
+        
+        return self._services["news_scenario_service"]
     
     def _load_news_sources_config(self) -> Dict[str, Any]:
         """Load news sources configuration from JSON file."""
