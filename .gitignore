@@ -153,3 +153,4 @@ docs/_build/
 scripts/clean_architecture_demo.py
 .agent-os-instructions
 agent-os-instructions
+.agent-os/
