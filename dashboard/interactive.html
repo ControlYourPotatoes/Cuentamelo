@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive AI Character Engagement Analysis Dashboard"
+    />
+    <meta name="author" content="Cuentamelo" />
+    <title>Interactive Character Analysis Dashboard</title>
+    <link rel="stylesheet" href="assets/interactive.css" />
+  </head>
+  <body>
+    <div class="dashboard-container">
+      <!-- Header Section -->
+      <header class="dashboard-header">
+        <div class="header-content">
+          <h1>Interactive Character Analysis</h1>
+          <p>
+            Real-time AI character engagement analysis for Puerto Rican news
+            content
+          </p>
+        </div>
+      </header>
+
+      <!-- Main Content Area -->
+      <main class="dashboard-main">
+        <!-- Control Panel Section -->
+        <section class="control-panel" id="control-panel">
+          <div class="panel-header">
+            <h2>Analysis Configuration</h2>
+            <p>Select news content and characters for real-time analysis</p>
+          </div>
+
+          <div class="control-grid">
+            <!-- News Selection Component -->
+            <div class="control-section" id="news-selector-section">
+              <h3>News Content</h3>
+              <div class="news-selector" id="news-selector">
+                <!-- News selector component will be populated by JavaScript -->
+              </div>
+            </div>
+
+            <!-- Character Selection Component -->
+            <div class="control-section" id="character-selector-section">
+              <h3>Characters</h3>
+              <div class="character-selector" id="character-selector">
+                <!-- Character selector component will be populated by JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Analysis Control -->
+          <div class="analysis-controls">
+            <button type="button" id="start-analysis" class="btn btn-primary">
+              <span class="btn-text">Start Analysis</span>
+              <span class="btn-loading" style="display: none">
+                <span class="spinner"></span>
+                Analyzing...
+              </span>
+            </button>
+            <button type="button" id="reset-analysis" class="btn btn-secondary">
+              Reset
+            </button>
+          </div>
+        </section>
+
+        <!-- Results Display Section -->
+        <section class="results-section" id="results-section">
+          <div class="results-header">
+            <h2>Analysis Results</h2>
+            <div class="results-status" id="results-status">
+              <span class="status-text">Ready to analyze</span>
+            </div>
+          </div>
+
+          <div class="results-container" id="results-container">
+            <!-- Results will be populated by JavaScript -->
+            <div class="results-placeholder">
+              <div class="placeholder-content">
+                <div class="placeholder-icon">📊</div>
+                <h3>No Analysis Results Yet</h3>
+                <p>
+                  Select news content and characters, then click "Start
+                  Analysis" to see real-time results.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Footer Section -->
+      <footer class="dashboard-footer">
+        <div class="footer-content">
+          <p>
+            &copy; 2025 Cuentamelo. Interactive AI Character Analysis Dashboard.
+          </p>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal" id="error-modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Error</h3>
+          <button type="button" class="modal-close" id="modal-close">
+            &times;
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="error-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="error-retry">
+            Retry
+          </button>
+          <button type="button" class="btn btn-secondary" id="error-close">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay" style="display: none">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <p id="loading-message">Loading...</p>
+      </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="components/sse-handler.js"></script>
+    <script src="components/news-selector.js"></script>
+    <script src="components/character-selector.js"></script>
+    <script src="components/results-display.js"></script>
+    <script src="assets/interactive.js"></script>
+  </body>
+</html>
